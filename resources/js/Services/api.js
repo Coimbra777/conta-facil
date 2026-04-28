@@ -1,5 +1,29 @@
 const API_BASE = '/api/v1';
 
+/**
+ * Envelope ApiResponse (success + data): espalha `data` no mesmo nível de `expense`,
+ * `charges`, etc., preservando compatibilidade com o frontend existente.
+ */
+function unwrapSuccessEnvelope(parsed) {
+    if (
+        parsed &&
+        typeof parsed === 'object' &&
+        parsed.success === true &&
+        parsed.data !== undefined &&
+        parsed.data !== null &&
+        typeof parsed.data === 'object' &&
+        ! Array.isArray(parsed.data)
+    ) {
+        return {
+            ...parsed.data,
+            message: parsed.message,
+            success: parsed.success,
+            meta: parsed.meta ?? {},
+        };
+    }
+    return parsed;
+}
+
 function getToken() {
     return localStorage.getItem('token');
 }
@@ -48,7 +72,7 @@ async function request(method, endpoint, body = null) {
         throw { status: response.status, data };
     }
 
-    return data;
+    return unwrapSuccessEnvelope(data);
 }
 
 async function postFormData(endpoint, formData) {
@@ -81,7 +105,7 @@ async function postFormData(endpoint, formData) {
         throw { status: response.status, data };
     }
 
-    return data;
+    return unwrapSuccessEnvelope(data);
 }
 
 async function upload(endpoint, file, fieldName = 'file') {
@@ -117,7 +141,7 @@ async function upload(endpoint, file, fieldName = 'file') {
         throw { status: response.status, data };
     }
 
-    return data;
+    return unwrapSuccessEnvelope(data);
 }
 
 async function requestAbsolute(method, url, body = null) {
@@ -148,7 +172,7 @@ async function requestAbsolute(method, url, body = null) {
         throw { status: response.status, data };
     }
 
-    return data;
+    return unwrapSuccessEnvelope(data);
 }
 
 export const api = {

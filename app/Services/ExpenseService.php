@@ -25,22 +25,22 @@ class ExpenseService
             throw new \DomainException('Team has no members.');
         }
 
-        $expense = Expense::create([
-            'team_id' => $team->id,
-            'created_by' => $creator->id,
-            'description' => $data['description'],
-            'total_amount' => $data['total_amount'],
-            'amount_per_member' => 0,
-            'due_date' => $data['due_date'],
-            'pix_key' => $data['pix_key'],
-            'pix_qr_code' => $data['pix_qr_code'] ?? null,
-            'status' => 'open',
-            'public_hash' => (string) Str::uuid(),
-            'manage_token' => (string) Str::uuid(),
-        ]);
+        $expense = DB::transaction(function () use ($team, $creator, $data, $members) {
+            $expense = Expense::create([
+                'team_id' => $team->id,
+                'created_by' => $creator->id,
+                'description' => $data['description'],
+                'total_amount' => $data['total_amount'],
+                'amount_per_member' => 0,
+                'due_date' => $data['due_date'],
+                'pix_key' => $data['pix_key'],
+                'pix_qr_code' => $data['pix_qr_code'] ?? null,
+                'status' => 'open',
+                'public_hash' => (string) Str::uuid(),
+                'manage_token' => (string) Str::uuid(),
+            ]);
 
-        foreach ($members as $member) {
-            try {
+            foreach ($members as $member) {
                 Charge::create([
                     'team_member_id' => $member->id,
                     'user_id' => $member->user_id,
@@ -50,16 +50,12 @@ class ExpenseService
                     'due_date' => $data['due_date'],
                     'status' => 'pending',
                 ]);
-            } catch (\Throwable $e) {
-                Log::error('Failed to create charge for team member', [
-                    'team_member_id' => $member->id,
-                    'expense_id' => $expense->id,
-                    'error' => $e->getMessage(),
-                ]);
             }
-        }
 
-        $this->redistributeChargeAmounts($expense);
+            $this->redistributeChargeAmounts($expense->fresh());
+
+            return $expense->fresh()->load('charges.teamMember');
+        });
 
         foreach ($members as $member) {
             $charge = $expense->charges()->where('team_member_id', $member->id)->first();
@@ -82,7 +78,7 @@ class ExpenseService
             }
         }
 
-        return $expense->load('charges.teamMember');
+        return $expense;
     }
 
     public function updateExpense(Expense $expense, array $data): Expense
@@ -143,60 +139,67 @@ class ExpenseService
             );
         }
 
-        $newChargeIds = [];
+        $result = DB::transaction(function () use ($team, $expense, $participants) {
+            $newChargeIds = [];
 
-        foreach ($participants as $p) {
-            $phone = PhoneNormalizer::digits($p['phone'] ?? '');
-            $name = trim((string) ($p['name'] ?? ''));
-            if ($phone === '' || strlen($phone) < 10 || $name === '') {
-                continue;
-            }
+            foreach ($participants as $p) {
+                $phone = PhoneNormalizer::digits($p['phone'] ?? '');
+                $name = trim((string) ($p['name'] ?? ''));
+                if ($phone === '' || strlen($phone) < 10 || $name === '') {
+                    continue;
+                }
 
-            $member = TeamMember::where('team_id', $team->id)
-                ->get()
-                ->first(fn (TeamMember $m) => PhoneNormalizer::digits((string) $m->phone) === $phone);
+                $member = TeamMember::where('team_id', $team->id)
+                    ->get()
+                    ->first(fn (TeamMember $m) => PhoneNormalizer::digits((string) $m->phone) === $phone);
 
-            if (! $member) {
-                $member = TeamMember::create([
-                    'team_id' => $team->id,
-                    'name' => $name,
-                    'phone' => $phone,
-                    'role' => 'member',
+                if (! $member) {
+                    $member = TeamMember::create([
+                        'team_id' => $team->id,
+                        'name' => $name,
+                        'phone' => $phone,
+                        'role' => 'member',
+                    ]);
+                }
+
+                if ($expense->charges()->where('team_member_id', $member->id)->exists()) {
+                    continue;
+                }
+
+                $charge = Charge::create([
+                    'team_member_id' => $member->id,
+                    'user_id' => $member->user_id,
+                    'expense_id' => $expense->id,
+                    'description' => $expense->description,
+                    'amount' => 0.0,
+                    'due_date' => $expense->due_date,
+                    'status' => 'pending',
                 ]);
+                $newChargeIds[] = $charge->id;
             }
 
-            if ($expense->charges()->where('team_member_id', $member->id)->exists()) {
-                continue;
+            if ($newChargeIds === []) {
+                throw new \DomainException(
+                    'Nenhum participante novo: verifique os telefones ou se ja estao na despesa.'
+                );
             }
 
-            $charge = Charge::create([
-                'team_member_id' => $member->id,
-                'user_id' => $member->user_id,
-                'expense_id' => $expense->id,
-                'description' => $expense->description,
-                'amount' => 0.0,
-                'due_date' => $expense->due_date,
-                'status' => 'pending',
-            ]);
-            $newChargeIds[] = $charge->id;
-        }
+            $this->redistributeChargeAmounts($expense->fresh());
 
-        if ($newChargeIds === []) {
-            throw new \DomainException(
-                'Nenhum participante novo: verifique os telefones ou se ja estao na despesa.'
-            );
-        }
+            return [
+                'expense' => $expense->fresh()->load('charges.teamMember'),
+                'newChargeIds' => $newChargeIds,
+            ];
+        });
 
-        $this->redistributeChargeAmounts($expense->fresh());
-
-        foreach ($newChargeIds as $chargeId) {
+        foreach ($result['newChargeIds'] as $chargeId) {
             $charge = Charge::query()->with('teamMember')->find($chargeId);
             if ($charge && $charge->teamMember) {
                 try {
                     $this->notificationService->sendChargeNotification(
                         $charge->teamMember,
                         $charge->fresh(),
-                        $expense->fresh()
+                        $result['expense']->fresh()
                     );
                 } catch (\Throwable $e) {
                     Log::warning('Failed to notify new charge', [
@@ -207,7 +210,7 @@ class ExpenseService
             }
         }
 
-        return $expense->fresh()->load('charges.teamMember');
+        return $result['expense'];
     }
 
     /**

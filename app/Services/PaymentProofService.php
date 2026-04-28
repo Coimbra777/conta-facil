@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\HttpApiException;
 use App\Models\Charge;
 use App\Models\PaymentProof;
 use App\Support\ChargeStatusTransition;
@@ -13,11 +14,19 @@ class PaymentProofService
     public function uploadProof(Charge $charge, UploadedFile $file): PaymentProof
     {
         if (! in_array($charge->status, ['pending', 'rejected'], true)) {
-            throw new \DomainException('Cannot upload proof for this charge status.');
+            throw new HttpApiException(
+                'Cannot upload proof for this charge status.',
+                'INVALID_CHARGE_STATE',
+                422,
+            );
         }
 
         if ($charge->paymentProofs()->exists() && $charge->status !== 'rejected') {
-            throw new \DomainException('Comprovante ja enviado.');
+            throw new HttpApiException(
+                'Comprovante ja enviado.',
+                'PROOF_ALREADY_SENT',
+                422,
+            );
         }
 
         $previousStatus = $charge->status;

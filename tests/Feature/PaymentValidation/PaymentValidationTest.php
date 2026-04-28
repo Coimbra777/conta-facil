@@ -94,7 +94,8 @@ class PaymentValidationTest extends TestCase
             ->patchJson("/api/v1/charges/{$charge1->id}/validate");
 
         $response->assertOk()
-            ->assertJsonPath('charge.status', 'validated');
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.charge.status', 'validated');
 
         $this->assertDatabaseHas('charges', [
             'id' => $charge1->id,
@@ -111,7 +112,8 @@ class PaymentValidationTest extends TestCase
             ->patchJson("/api/v1/charges/{$charge2->id}/reject");
 
         $response->assertOk()
-            ->assertJsonPath('charge.status', 'rejected');
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.charge.status', 'rejected');
 
         $this->assertDatabaseHas('charges', [
             'id' => $charge2->id,
@@ -198,6 +200,7 @@ class PaymentValidationTest extends TestCase
         ]);
 
         $response->assertStatus(201)
-            ->assertJsonPath('status', 'proof_sent');
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.status', 'proof_sent');
     }
 }

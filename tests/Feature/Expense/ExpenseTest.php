@@ -57,7 +57,12 @@ class ExpenseTest extends TestCase
 
         $response->assertStatus(201)
             ->assertJsonStructure([
-                'expense' => ['id', 'description', 'total_amount', 'status', 'public_hash', 'pix_key', 'charges'],
+                'success',
+                'message',
+                'meta',
+                'data' => [
+                    'expense' => ['id', 'description', 'total_amount', 'status', 'public_hash', 'pix_key', 'charges'],
+                ],
             ]);
 
         $this->assertDatabaseHas('expenses', [
@@ -107,7 +112,7 @@ class ExpenseTest extends TestCase
         $response = $this->actingAs($admin, 'sanctum')
             ->postJson("/api/v1/teams/{$team->id}/expenses", $this->expensePayload());
 
-        $hash = $response->json('expense.public_hash');
+        $hash = $response->json('data.expense.public_hash');
         $this->assertNotNull($hash);
         $this->assertMatchesRegularExpression('/^[0-9a-f-]{36}$/', $hash);
     }
@@ -134,7 +139,7 @@ class ExpenseTest extends TestCase
                 'total_amount' => 100.00,
             ]));
 
-        $this->assertEquals('25.00', $response->json('expense.amount_per_member'));
+        $this->assertEquals('25.00', $response->json('data.expense.amount_per_member'));
     }
 
     public function test_charges_created_with_pending_status(): void
@@ -189,17 +194,22 @@ class ExpenseTest extends TestCase
                 'total_amount' => 50.00,
             ]));
 
-        $expenseId = $createResponse->json('expense.id');
+        $expenseId = $createResponse->json('data.expense.id');
 
         $response = $this->actingAs($admin, 'sanctum')
             ->getJson("/api/v1/teams/{$team->id}/expenses/{$expenseId}");
 
         $response->assertOk()
             ->assertJsonStructure([
-                'expense' => [
-                    'id', 'description', 'total_amount', 'status',
-                    'charges' => [
-                        '*' => ['id', 'amount', 'status', 'member'],
+                'success',
+                'message',
+                'meta',
+                'data' => [
+                    'expense' => [
+                        'id', 'description', 'total_amount', 'status',
+                        'charges' => [
+                            '*' => ['id', 'amount', 'status', 'member'],
+                        ],
                     ],
                 ],
             ]);
@@ -227,7 +237,7 @@ class ExpenseTest extends TestCase
         $create = $this->actingAs($admin, 'sanctum')
             ->postJson("/api/v1/teams/{$team->id}/expenses", $this->expensePayload());
 
-        $expenseId = $create->json('expense.id');
+        $expenseId = $create->json('data.expense.id');
         $newDue = now()->addDays(10)->format('Y-m-d');
 
         $patch = $this->actingAs($admin, 'sanctum')
@@ -239,8 +249,8 @@ class ExpenseTest extends TestCase
             ]);
 
         $patch->assertOk()
-            ->assertJsonPath('expense.description', 'Atualizado')
-            ->assertJsonPath('expense.total_amount', '120.00');
+            ->assertJsonPath('data.expense.description', 'Atualizado')
+            ->assertJsonPath('data.expense.total_amount', '120.00');
 
         $this->assertDatabaseHas('expenses', [
             'id' => $expenseId,
@@ -258,7 +268,7 @@ class ExpenseTest extends TestCase
                 'total_amount' => 90.00,
             ]));
 
-        $expenseId = $create->json('expense.id');
+        $expenseId = $create->json('data.expense.id');
 
         $add = $this->actingAs($admin, 'sanctum')
             ->postJson("/api/v1/teams/{$team->id}/expenses/{$expenseId}/participants", [
@@ -300,7 +310,7 @@ class ExpenseTest extends TestCase
 
         $create = $this->actingAs($admin, 'sanctum')
             ->postJson("/api/v1/teams/{$team->id}/expenses", $this->expensePayload());
-        $expenseId = $create->json('expense.id');
+        $expenseId = $create->json('data.expense.id');
 
         $patch = $this->actingAs($member, 'sanctum')
             ->patchJson("/api/v1/teams/{$team->id}/expenses/{$expenseId}", [

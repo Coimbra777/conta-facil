@@ -1,8 +1,15 @@
 <?php
 
+use App\Exceptions\HttpApiException;
+use App\Http\Responses\ApiResponse;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -19,5 +26,58 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->throttleApi('60,1');
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->render(function (HttpApiException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ApiResponse::error(
+                $e->getMessage(),
+                $e->errorCode,
+                $e->status,
+                $e->errors,
+            );
+        });
+
+        $exceptions->render(function (ValidationException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            $msg = collect($e->errors())->flatten()->first() ?: 'Dados invalidos.';
+
+            return ApiResponse::error($msg, 'VALIDATION_ERROR', 422, $e->errors());
+        });
+
+        $exceptions->render(function (NotFoundHttpException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ApiResponse::error('Not found.', 'NOT_FOUND', 404);
+        });
+
+        $exceptions->render(function (ModelNotFoundException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ApiResponse::error('Not found.', 'NOT_FOUND', 404);
+        });
+
+        $exceptions->render(function (AuthenticationException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ApiResponse::error('Unauthenticated.', 'UNAUTHENTICATED', 401);
+        });
+
+        $exceptions->render(function (\DomainException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ApiResponse::error($e->getMessage(), 'DOMAIN_ERROR', 422);
+        });
     })->create();

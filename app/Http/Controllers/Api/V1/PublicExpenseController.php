@@ -2,6 +2,11 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Charge\ChargeActionAudience;
+use App\Actions\Charge\RejectChargeAction;
+use App\Actions\Charge\SubmitPaymentProofAction;
+use App\Actions\Charge\ValidateChargeAction;
+use App\Actions\Expense\AddPublicExpenseParticipantsAction;
 use App\Http\Controllers\Concerns\AuthorizesPublicExpense;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\AddPublicExpenseParticipantsRequest;
@@ -11,19 +16,17 @@ use App\Http\Requests\Api\V1\UpdatePublicExpenseRequest;
 use App\Http\Requests\Api\V1\ValidateParticipantPublicRequest;
 use App\Http\Resources\CreatedPublicExpenseResource;
 use App\Http\Resources\PublicExpenseResource;
+use App\Http\Responses\ApiResponse;
 use App\Models\Charge;
 use App\Models\Expense;
-use App\Models\TeamMember;
 use App\Services\ExpenseService;
-use App\Services\PaymentProofService;
 use App\Services\PublicExpenseCreatorService;
-use App\Support\ChargeStatusTransition;
+use App\Support\PublicParticipantChargeResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PublicExpenseController extends Controller
@@ -44,9 +47,11 @@ class PublicExpenseController extends Controller
             'participants' => $data['participants'],
         ]);
 
-        return response()->json([
-            'expense' => new CreatedPublicExpenseResource($expense),
-        ], 201);
+        return ApiResponse::success(
+            ['expense' => (new CreatedPublicExpenseResource($expense))->resolve()],
+            'Cobrança criada com sucesso.',
+            201,
+        );
     }
 
     public function show(Request $request, string $hash): JsonResponse
@@ -57,8 +62,8 @@ class PublicExpenseController extends Controller
             ->with(['charges.teamMember', 'charges.paymentProofs'])
             ->firstOrFail();
 
-        return response()->json([
-            'expense' => new PublicExpenseResource($expense),
+        return ApiResponse::success([
+            'expense' => (new PublicExpenseResource($expense))->resolve(),
         ]);
     }
 
@@ -66,46 +71,47 @@ class PublicExpenseController extends Controller
     {
         $expense = Expense::where('public_hash', $hash)->firstOrFail();
 
-        $auth = $this->authorizeManageToken($request, $expense);
-        if ($auth instanceof JsonResponse) {
-            return $auth;
-        }
+        $this->authorizeManageToken($request, $expense);
 
         if ($expense->status === 'closed') {
-            return response()->json(['message' => 'Esta despesa ja foi finalizada.'], 422);
+            return ApiResponse::error(
+                'Esta despesa ja foi finalizada.',
+                'INVALID_EXPENSE_STATE',
+                422,
+            );
         }
 
         $charges = $expense->charges()->get();
         if ($charges->isEmpty()) {
-            return response()->json(['message' => 'Nao ha participantes para finalizar.'], 422);
+            return ApiResponse::error(
+                'Nao ha participantes para finalizar.',
+                'INVALID_EXPENSE_STATE',
+                422,
+            );
         }
 
         if ($charges->contains(fn (Charge $c) => $c->status !== 'validated')) {
-            return response()->json([
-                'message' => 'So e possivel finalizar quando todos os participantes estiverem com pagamento validado.',
-            ], 422);
+            return ApiResponse::error(
+                'So e possivel finalizar quando todos os participantes estiverem com pagamento validado.',
+                'INVALID_EXPENSE_STATE',
+                422,
+            );
         }
 
         $expense->update(['status' => 'closed']);
         $expense->load(['charges.teamMember', 'charges.paymentProofs']);
 
-        return response()->json([
-            'expense' => new PublicExpenseResource($expense),
-        ]);
+        return ApiResponse::success([
+            'expense' => (new PublicExpenseResource($expense))->resolve(),
+        ], 'Despesa finalizada.');
     }
 
     public function updateExpense(UpdatePublicExpenseRequest $request, string $hash, ExpenseService $expenseService): JsonResponse
     {
         $expense = Expense::where('public_hash', $hash)->firstOrFail();
 
-        $auth = $this->authorizeManageToken($request, $expense);
-        if ($auth instanceof JsonResponse) {
-            return $auth;
-        }
-
-        if ($blocked = $this->rejectIfClosed($expense)) {
-            return $blocked;
-        }
+        $this->authorizeManageToken($request, $expense);
+        $this->assertExpenseOpen($expense);
 
         $data = $request->validated();
         $oldTotal = (float) $expense->total_amount;
@@ -113,9 +119,11 @@ class PublicExpenseController extends Controller
         $totalChanged = abs($totalAmount - $oldTotal) > 0.001;
 
         if ($totalChanged && $expense->charges()->where('status', '!=', 'pending')->exists()) {
-            return response()->json([
-                'message' => 'Nao e possivel alterar o valor total enquanto houver cobranca com status diferente de pendente.',
-            ], 422);
+            return ApiResponse::error(
+                'Nao e possivel alterar o valor total enquanto houver cobranca com status diferente de pendente.',
+                'INVALID_EXPENSE_STATE',
+                422,
+            );
         }
 
         $chargeCount = $expense->charges()->count();
@@ -150,77 +158,30 @@ class PublicExpenseController extends Controller
 
         $expense->refresh()->load(['charges.teamMember', 'charges.paymentProofs']);
 
-        return response()->json([
-            'expense' => new PublicExpenseResource($expense),
-        ]);
+        return ApiResponse::success([
+            'expense' => (new PublicExpenseResource($expense))->resolve(),
+        ], 'Despesa atualizada.');
     }
 
-    public function addParticipants(AddPublicExpenseParticipantsRequest $request, string $hash, ExpenseService $expenseService): JsonResponse
-    {
+    public function addParticipants(
+        AddPublicExpenseParticipantsRequest $request,
+        string $hash,
+        AddPublicExpenseParticipantsAction $action,
+    ): JsonResponse {
         $expense = Expense::where('public_hash', $hash)->firstOrFail();
 
-        $auth = $this->authorizeManageToken($request, $expense);
-        if ($auth instanceof JsonResponse) {
-            return $auth;
-        }
-
-        if ($blocked = $this->rejectIfClosed($expense)) {
-            return $blocked;
-        }
-
-        if ($expense->charges()->where('status', '!=', 'pending')->exists()) {
-            return response()->json([
-                'message' => 'Não é possível redistribuir valores pois já existem pagamentos em andamento.',
-            ], 422);
-        }
+        $this->authorizeManageToken($request, $expense);
+        $this->assertExpenseOpen($expense);
 
         $participants = $request->input('participants', []);
 
-        $existingPhones = $expense->charges()
-            ->with('teamMember')
-            ->get()
-            ->map(fn (Charge $c) => preg_replace('/\D+/', '', (string) ($c->teamMember?->phone ?? '')))
-            ->filter()
-            ->all();
-
-        foreach ($participants as $p) {
-            $digits = $p['phone'];
-            if (in_array($digits, $existingPhones, true)) {
-                return response()->json([
-                    'message' => 'Participante com este telefone ja existe nesta despesa.',
-                ], 422);
-            }
-        }
-
-        DB::transaction(function () use ($expense, $participants, $expenseService) {
-            foreach ($participants as $p) {
-                $member = TeamMember::create([
-                    'team_id' => $expense->team_id,
-                    'user_id' => null,
-                    'name' => $p['name'],
-                    'phone' => $p['phone'],
-                    'role' => 'member',
-                ]);
-
-                Charge::create([
-                    'team_member_id' => $member->id,
-                    'expense_id' => $expense->id,
-                    'description' => $expense->description,
-                    'amount' => 0.0,
-                    'due_date' => $expense->due_date,
-                    'status' => 'pending',
-                ]);
-            }
-
-            $expense->refresh();
-            $expenseService->redistributeChargeAmounts($expense);
-        });
+        $expense = $action->execute($expense, $participants);
 
         $expense->refresh()->load(['charges.teamMember', 'charges.paymentProofs']);
 
-        return response()->json([
-            'expense' => new PublicExpenseResource($expense),
-        ], 201);
+        return ApiResponse::success([
+            'expense' => (new PublicExpenseResource($expense))->resolve(),
+        ], 'Participantes adicionados.', 201);
     }
 
     public function validateParticipantPublic(ValidateParticipantPublicRequest $request, string $hash): JsonResponse
@@ -228,141 +189,66 @@ class PublicExpenseController extends Controller
         $expense = Expense::byHash($hash)->first();
 
         if (! $expense) {
-            return response()->json(['message' => 'Not found.'], 404);
+            return ApiResponse::error('Not found.', 'NOT_FOUND', 404);
         }
 
-        if ($blocked = $this->rejectIfClosed($expense)) {
-            return $blocked;
-        }
+        $this->assertExpenseOpen($expense);
 
         $validated = $request->validated();
-        $charge = $this->findChargeForExactPublicParticipant($expense, $validated['name'], $validated['phone']);
+        $charge = PublicParticipantChargeResolver::findChargeForExactPublicParticipant(
+            $expense,
+            $validated['name'],
+            $validated['phone'],
+        );
 
         if ($charge === null) {
-            return response()->json([
-                'message' => 'Participante não encontrado nesta despesa.',
-            ], 422);
+            return ApiResponse::error(
+                'Participante não encontrado nesta despesa.',
+                'PARTICIPANT_NOT_FOUND',
+                422,
+            );
         }
 
         $charge->refresh();
 
         $status = $charge->status;
 
-        return response()->json([
+        return ApiResponse::success([
             'status' => $status,
             'rejection_reason' => $charge->rejection_reason,
-            'message' => $this->messageForValidateParticipantStatus($status),
             'can_submit_proof' => in_array($status, ['pending', 'rejected'], true),
-        ]);
+        ], $this->messageForValidateParticipantStatus($status));
     }
 
-    public function submitProofPublic(SubmitPublicProofRequest $request, string $hash, PaymentProofService $service): JsonResponse
-    {
+    public function submitProofPublic(
+        SubmitPublicProofRequest $request,
+        string $hash,
+        SubmitPaymentProofAction $action,
+    ): JsonResponse {
         $expense = Expense::where('public_hash', $hash)->firstOrFail();
 
-        if ($blocked = $this->rejectIfClosed($expense)) {
-            return $blocked;
-        }
+        $this->assertExpenseOpen($expense);
 
         $validated = $request->validated();
-        $charge = $this->findChargeForExactPublicParticipant($expense, $validated['name'], $validated['phone']);
 
-        if ($charge === null) {
-            return response()->json([
-                'message' => 'Participante não encontrado nesta despesa.',
-            ], 422);
-        }
+        $charge = $action->execute($expense, $validated['name'], $validated['phone'], $request->file('proof'));
 
-        $charge->refresh();
-
-        if ($charge->status === 'validated') {
-            return response()->json([
-                'message' => 'Pagamento já confirmado.',
-                'status' => 'validated',
-                'rejection_reason' => null,
-            ], 422);
-        }
-
-        if ($charge->status === 'proof_sent') {
-            return response()->json([
-                'message' => 'Comprovante já enviado.',
-                'status' => 'proof_sent',
-                'rejection_reason' => null,
-            ], 422);
-        }
-
-        if (! in_array($charge->status, ['pending', 'rejected'], true)) {
-            return response()->json([
-                'message' => 'Não é possível enviar comprovante neste estado.',
-                'status' => $charge->status,
-                'rejection_reason' => $charge->rejection_reason,
-            ], 422);
-        }
-
-        try {
-            $service->uploadProof($charge, $request->file('proof'));
-        } catch (\DomainException $e) {
-            $fresh = $charge->fresh();
-
-            return response()->json([
-                'message' => $e->getMessage(),
-                'status' => $fresh?->status ?? $charge->status,
-                'rejection_reason' => $fresh?->rejection_reason,
-            ], 422);
-        }
-
-        $charge->refresh();
-
-        ChargeStatusTransition::assertTransition($charge->status, 'proof_sent');
-
-        $charge->update(['status' => 'proof_sent']);
-
-        $charge->refresh();
-
-        return response()->json([
-            'message' => 'Comprovante enviado. Aguardando aprovação do responsável.',
+        return ApiResponse::success([
             'status' => $charge->status,
             'rejection_reason' => $charge->rejection_reason,
-        ], 201);
+        ], 'Comprovante enviado. Aguardando aprovação do responsável.', 201);
     }
 
-    public function validateCharge(Request $request, Charge $charge): JsonResponse
+    public function validateCharge(Request $request, Charge $charge, ValidateChargeAction $validateChargeAction): JsonResponse
     {
         $expense = $this->authorizeManage($request, $charge->expense);
-        if ($expense instanceof JsonResponse) {
-            return $expense;
-        }
+        $this->assertExpenseOpen($expense);
 
-        if ($blocked = $this->rejectIfClosed($expense)) {
-            return $blocked;
-        }
-
-        if ($charge->status === 'validated') {
-            return response()->json(['message' => 'Este pagamento ja foi validado.'], 422);
-        }
-
-        if ($charge->status !== 'proof_sent') {
-            $message = match ($charge->status) {
-                'rejected' => 'Comprovante rejeitado. O participante precisa enviar um novo comprovante pelo link da despesa antes da validacao.',
-                default => 'So e possivel validar apos o participante enviar o comprovante e marcar como pago (status aguardando aprovacao).',
-            };
-
-            return response()->json(['message' => $message], 422);
-        }
-
-        ChargeStatusTransition::assertTransition($charge->status, 'validated');
-
-        $charge->update([
-            'status' => 'validated',
-            'paid_at' => now(),
-            'rejection_reason' => null,
-        ]);
-
-        $expense->syncClosedStateFromCharges();
+        $charge = $validateChargeAction->execute($charge, ChargeActionAudience::PUBLIC_MANAGE);
 
         $charge->load('teamMember');
 
-        return response()->json([
+        return ApiResponse::success([
             'charge' => [
                 'id' => $charge->id,
                 'status' => $charge->status,
@@ -371,102 +257,34 @@ class PublicExpenseController extends Controller
                     'name' => $charge->teamMember?->name,
                 ],
             ],
-        ]);
+        ], 'Pagamento validado.');
     }
 
-    public function rejectCharge(Request $request, Charge $charge): JsonResponse
+    public function rejectCharge(Request $request, Charge $charge, RejectChargeAction $rejectChargeAction): JsonResponse
     {
         $expense = $this->authorizeManage($request, $charge->expense);
-        if ($expense instanceof JsonResponse) {
-            return $expense;
-        }
+        $this->assertExpenseOpen($expense);
 
-        if ($blocked = $this->rejectIfClosed($expense)) {
-            return $blocked;
-        }
+        $charge = $rejectChargeAction->execute($charge, $request->input('reason'), ChargeActionAudience::PUBLIC_MANAGE);
 
-        if ($charge->status === 'validated') {
-            return response()->json(['message' => 'Nao e possivel rejeitar um pagamento ja validado.'], 422);
-        }
-
-        if ($charge->status !== 'proof_sent') {
-            $message = match ($charge->status) {
-                'rejected' => 'Este comprovante ja foi rejeitado.',
-                default => 'So e possivel rejeitar quando houver comprovante aguardando aprovacao.',
-            };
-
-            return response()->json(['message' => $message], 422);
-        }
-
-        ChargeStatusTransition::assertTransition($charge->status, 'rejected');
-
-        $reasonRaw = $request->input('reason');
-        $reason = is_string($reasonRaw) && trim($reasonRaw) !== ''
-            ? Str::limit(trim($reasonRaw), 2000)
-            : null;
-
-        $charge->update([
-            'status' => 'rejected',
-            'rejection_reason' => $reason,
-        ]);
-
-        $latestProof = $charge->latestProof();
-        if ($latestProof) {
-            $latestProof->update(['status' => 'rejected']);
-        }
-
-        $charge->load('teamMember');
-
-        return response()->json([
+        return ApiResponse::success([
             'charge' => [
                 'id' => $charge->id,
                 'status' => $charge->status,
             ],
-        ]);
+        ], 'Comprovante rejeitado.');
     }
 
     public function downloadProof(Request $request, Charge $charge): StreamedResponse|JsonResponse
     {
-        $authorized = $this->authorizeManage($request, $charge->expense);
-        if ($authorized instanceof JsonResponse) {
-            return $authorized;
-        }
+        $this->authorizeManage($request, $charge->expense);
 
         $proof = $charge->latestProof();
         if (! $proof) {
-            return response()->json(['message' => 'No proof found.'], 404);
+            return ApiResponse::error('No proof found.', 'NOT_FOUND', 404);
         }
 
         return Storage::disk('local')->download($proof->file_path, $proof->original_filename);
-    }
-
-    /**
-     * Nome (trim) e telefone (só dígitos) devem coincidir exatamente com o cadastro. Não altera dados.
-     */
-    private function findChargeForExactPublicParticipant(Expense $expense, string $nameInput, string $phoneRaw): ?Charge
-    {
-        $nameTrim = trim($nameInput);
-        $phoneDigits = preg_replace('/\D+/', '', $phoneRaw) ?? '';
-
-        if ($nameTrim === '' || $phoneDigits === '' || strlen($phoneDigits) < 10) {
-            return null;
-        }
-
-        foreach ($expense->charges()->with('teamMember')->get() as $charge) {
-            $member = $charge->teamMember;
-            if ($member === null) {
-                continue;
-            }
-
-            $storedDigits = preg_replace('/\D+/', '', (string) $member->phone) ?? '';
-            $storedName = trim((string) $member->name);
-
-            if ($storedDigits === $phoneDigits && $storedName === $nameTrim) {
-                return $charge;
-            }
-        }
-
-        return null;
     }
 
     private function messageForValidateParticipantStatus(string $status): string

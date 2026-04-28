@@ -27,8 +27,14 @@ class StorePublicExpenseTest extends TestCase
         ]);
 
         $response->assertCreated()
+            ->assertJson(['success' => true])
             ->assertJsonStructure([
-                'expense' => ['id', 'public_hash', 'manage_token', 'manage_path'],
+                'success',
+                'message',
+                'meta',
+                'data' => [
+                    'expense' => ['id', 'public_hash', 'manage_token', 'manage_path'],
+                ],
             ]);
 
         $this->assertDatabaseHas('expenses', [

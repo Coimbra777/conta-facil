@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Expense\AddParticipantsToExpenseAction;
+use App\Actions\Expense\CreateExpenseAction;
+use App\Exceptions\HttpApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\AddTeamExpenseParticipantsRequest;
 use App\Http\Requests\Api\V1\StoreExpenseRequest;
 use App\Http\Requests\Api\V1\UpdateExpenseRequest;
 use App\Http\Resources\ChargeResource;
 use App\Http\Resources\ExpenseResource;
+use App\Http\Responses\ApiResponse;
 use App\Models\Expense;
 use App\Models\Team;
 use App\Services\ExpenseService;
@@ -16,25 +20,21 @@ use Illuminate\Support\Facades\Auth;
 
 class ExpenseController extends Controller
 {
-    public function store(StoreExpenseRequest $request, Team $team, ExpenseService $expenseService): JsonResponse
+    public function store(StoreExpenseRequest $request, Team $team, CreateExpenseAction $createExpenseAction): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
         $membership = $team->members()->where('user_id', $user->id)->first();
-        if (!$membership || $membership->role !== 'admin') {
-            return response()->json(['message' => 'Forbidden.'], 403);
+        if (! $membership || $membership->role !== 'admin') {
+            throw new HttpApiException('Forbidden.', 'FORBIDDEN', 403);
         }
 
-        try {
-            $expense = $expenseService->createExpenseAndSplit($team, $user, $request->validated());
+        $expense = $createExpenseAction->execute($team, $user, $request->validated());
 
-            return response()->json([
-                'expense' => new ExpenseResource($expense),
-            ], 201);
-        } catch (\DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
+        return ApiResponse::success([
+            'expense' => (new ExpenseResource($expense))->resolve(),
+        ], 'Despesa criada com sucesso.', 201);
     }
 
     public function index(Team $team): JsonResponse
@@ -42,14 +42,14 @@ class ExpenseController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        if (!$team->members()->where('user_id', $user->id)->exists()) {
-            return response()->json(['message' => 'Forbidden.'], 403);
+        if (! $team->members()->where('user_id', $user->id)->exists()) {
+            throw new HttpApiException('Forbidden.', 'FORBIDDEN', 403);
         }
 
         $expenses = $team->expenses()->latest()->get();
 
-        return response()->json([
-            'expenses' => ExpenseResource::collection($expenses),
+        return ApiResponse::success([
+            'expenses' => ExpenseResource::collection($expenses)->resolve(),
         ]);
     }
 
@@ -58,49 +58,45 @@ class ExpenseController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        if (!$team->members()->where('user_id', $user->id)->exists()) {
-            return response()->json(['message' => 'Forbidden.'], 403);
+        if (! $team->members()->where('user_id', $user->id)->exists()) {
+            throw new HttpApiException('Forbidden.', 'FORBIDDEN', 403);
         }
 
         if ($expense->team_id !== $team->id) {
-            return response()->json(['message' => 'Not found.'], 404);
+            throw new HttpApiException('Not found.', 'NOT_FOUND', 404);
         }
 
         $expense->load('charges.teamMember', 'charges.paymentProofs');
 
-        return response()->json([
-            'expense' => new ExpenseResource($expense),
+        return ApiResponse::success([
+            'expense' => (new ExpenseResource($expense))->resolve(),
         ]);
     }
 
-    public function update(UpdateExpenseRequest $request, Team $team, Expense $expense, ExpenseService $expenseService): JsonResponse
-    {
-        try {
-            $expense = $expenseService->updateExpense($expense, $request->validated());
-        } catch (\DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
+    public function update(
+        UpdateExpenseRequest $request,
+        Team $team,
+        Expense $expense,
+        ExpenseService $expenseService,
+    ): JsonResponse {
+        $expense = $expenseService->updateExpense($expense, $request->validated());
 
-        return response()->json([
-            'expense' => new ExpenseResource($expense),
-        ]);
+        return ApiResponse::success([
+            'expense' => (new ExpenseResource($expense))->resolve(),
+        ], 'Despesa atualizada.');
     }
 
-    public function addParticipants(AddTeamExpenseParticipantsRequest $request, Team $team, Expense $expense, ExpenseService $expenseService): JsonResponse
-    {
-        try {
-            $expense = $expenseService->addParticipantsToExpense(
-                $team,
-                $expense,
-                $request->input('participants', [])
-            );
-        } catch (\DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
+    public function addParticipants(
+        AddTeamExpenseParticipantsRequest $request,
+        Team $team,
+        Expense $expense,
+        AddParticipantsToExpenseAction $action,
+    ): JsonResponse {
+        $expense = $action->execute($team, $expense, $request->input('participants', []));
 
-        return response()->json([
-            'expense' => new ExpenseResource($expense),
-        ]);
+        return ApiResponse::success([
+            'expense' => (new ExpenseResource($expense))->resolve(),
+        ], 'Participantes atualizados.');
     }
 
     public function showDirect(Expense $expense): JsonResponse
@@ -108,14 +104,14 @@ class ExpenseController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        if (!$expense->team->members()->where('user_id', $user->id)->exists()) {
-            return response()->json(['message' => 'Forbidden.'], 403);
+        if (! $expense->team->members()->where('user_id', $user->id)->exists()) {
+            throw new HttpApiException('Forbidden.', 'FORBIDDEN', 403);
         }
 
         $expense->load('charges.teamMember', 'charges.paymentProofs');
 
-        return response()->json([
-            'expense' => new ExpenseResource($expense),
+        return ApiResponse::success([
+            'expense' => (new ExpenseResource($expense))->resolve(),
         ]);
     }
 
@@ -125,14 +121,14 @@ class ExpenseController extends Controller
         $user = Auth::user();
 
         $membership = $expense->team->members()->where('user_id', $user->id)->first();
-        if (!$membership || $membership->role !== 'admin') {
-            return response()->json(['message' => 'Forbidden.'], 403);
+        if (! $membership || $membership->role !== 'admin') {
+            throw new HttpApiException('Forbidden.', 'FORBIDDEN', 403);
         }
 
         $expense->load('charges.teamMember', 'charges.paymentProofs');
 
-        return response()->json([
-            'charges' => ChargeResource::collection($expense->charges),
+        return ApiResponse::success([
+            'charges' => ChargeResource::collection($expense->charges)->resolve(),
         ]);
     }
 }

@@ -2,40 +2,49 @@
 
 namespace App\Http\Controllers\Concerns;
 
+use App\Exceptions\HttpApiException;
 use App\Models\Expense;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 trait AuthorizesPublicExpense
 {
-    protected function authorizeManage(Request $request, ?Expense $expense): Expense|JsonResponse
+    /**
+     * @throws HttpApiException
+     */
+    protected function authorizeManage(Request $request, ?Expense $expense): Expense
     {
         if (! $expense || ! $expense->public_hash) {
-            return response()->json(['message' => 'Not found.'], 404);
+            throw new HttpApiException('Not found.', 'NOT_FOUND', 404);
         }
 
         return $this->authorizeManageToken($request, $expense);
     }
 
-    protected function authorizeManageToken(Request $request, Expense $expense): Expense|JsonResponse
+    /**
+     * @throws HttpApiException
+     */
+    protected function authorizeManageToken(Request $request, Expense $expense): Expense
     {
         $token = $this->resolveManageToken($request);
         if (! $token || ! hash_equals((string) $expense->manage_token, (string) $token)) {
-            return response()->json(['message' => 'Forbidden.'], 403);
+            throw new HttpApiException('Forbidden.', 'FORBIDDEN', 403);
         }
 
         return $expense;
     }
 
-    protected function rejectIfClosed(Expense $expense): ?JsonResponse
+    /**
+     * @throws HttpApiException
+     */
+    protected function assertExpenseOpen(Expense $expense): void
     {
         if ($expense->status === 'closed') {
-            return response()->json([
-                'message' => 'Esta despesa foi finalizada e nao aceita mais alteracoes.',
-            ], 422);
+            throw new HttpApiException(
+                'Esta despesa foi finalizada e nao aceita mais alteracoes.',
+                'EXPENSE_CLOSED',
+                422,
+            );
         }
-
-        return null;
     }
 
     protected function resolveManageToken(Request $request): ?string

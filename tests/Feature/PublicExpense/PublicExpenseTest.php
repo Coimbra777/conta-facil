@@ -121,11 +121,17 @@ class PublicExpenseTest extends TestCase
         $response = $this->getJson('/api/v1/public/expenses/test-hash-123');
 
         $response->assertOk()
-            ->assertJsonPath('expense.description', 'Churrasco')
-            ->assertJsonPath('expense.pix_key', '11999999999')
-            ->assertJsonPath('expense.can_manage', false)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.expense.description', 'Churrasco')
+            ->assertJsonPath('data.expense.pix_key', '11999999999')
+            ->assertJsonPath('data.expense.can_manage', false)
             ->assertJsonStructure([
-                'expense' => ['id', 'description', 'total_amount', 'amount', 'amount_per_member', 'pix_key', 'pix_qr_code', 'participants', 'can_manage'],
+                'success',
+                'message',
+                'data' => [
+                    'expense' => ['id', 'description', 'total_amount', 'amount', 'amount_per_member', 'pix_key', 'pix_qr_code', 'participants', 'can_manage'],
+                ],
+                'meta',
             ]);
     }
 
@@ -136,11 +142,17 @@ class PublicExpenseTest extends TestCase
         $response = $this->getJson('/api/v1/public/expenses/test-hash-123?manage='.urlencode('manage-token-secret'));
 
         $response->assertOk()
-            ->assertJsonPath('expense.can_manage', true)
-            ->assertJsonPath('expense.owner_phone', '11988887777')
-            ->assertJsonCount(2, 'expense.members')
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.expense.can_manage', true)
+            ->assertJsonPath('data.expense.owner_phone', '11988887777')
+            ->assertJsonCount(2, 'data.expense.members')
             ->assertJsonStructure([
-                'expense' => ['members', 'owner_name', 'amount_per_member'],
+                'success',
+                'message',
+                'data' => [
+                    'expense' => ['members', 'owner_name', 'amount_per_member'],
+                ],
+                'meta',
             ]);
     }
 
@@ -163,7 +175,9 @@ class PublicExpenseTest extends TestCase
             'proof' => $file,
         ]);
 
-        $response->assertStatus(201)->assertJsonPath('status', 'proof_sent');
+        $response->assertStatus(201)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.status', 'proof_sent');
 
         $charge = Charge::query()
             ->whereHas('teamMember', fn ($q) => $q->where('phone', '11000000002'))
@@ -228,7 +242,8 @@ class PublicExpenseTest extends TestCase
         ]);
 
         $response->assertOk()
-            ->assertJsonPath('charge.status', 'validated');
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.charge.status', 'validated');
     }
 
     public function test_validate_participant_exact_match_returns_status_and_can_submit(): void
@@ -240,8 +255,9 @@ class PublicExpenseTest extends TestCase
             'phone' => '11000000002',
         ])
             ->assertOk()
-            ->assertJsonPath('status', 'pending')
-            ->assertJsonPath('can_submit_proof', true)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('data.can_submit_proof', true)
             ->assertJsonPath('message', 'Você ainda não enviou comprovante.');
     }
 
@@ -275,7 +291,8 @@ class PublicExpenseTest extends TestCase
         ]);
 
         $response->assertStatus(201)
-            ->assertJsonPath('status', 'proof_sent')
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.status', 'proof_sent')
             ->assertJsonPath('message', 'Comprovante enviado. Aguardando aprovação do responsável.');
 
         $this->assertDatabaseHas('team_members', [
@@ -315,14 +332,16 @@ class PublicExpenseTest extends TestCase
             'phone' => '11000000002',
         ])
             ->assertOk()
-            ->assertJsonPath('status', 'proof_sent')
-            ->assertJsonPath('can_submit_proof', false);
+            ->assertJsonPath('data.status', 'proof_sent')
+            ->assertJsonPath('data.can_submit_proof', false);
 
         $payload['proof'] = UploadedFile::fake()->create('b.jpg', 100, 'image/jpeg');
         $this->post('/api/v1/public/expenses/test-hash-123/submit-proof', $payload)
             ->assertStatus(422)
+            ->assertJsonPath('success', false)
             ->assertJsonPath('message', 'Comprovante já enviado.')
-            ->assertJsonPath('status', 'proof_sent');
+            ->assertJsonPath('code', 'PROOF_ALREADY_SENT')
+            ->assertJsonPath('errors.status', 'proof_sent');
     }
 
     public function test_submit_proof_rejects_when_already_validated(): void
@@ -347,8 +366,10 @@ class PublicExpenseTest extends TestCase
         ]);
 
         $response->assertStatus(422)
+            ->assertJsonPath('success', false)
             ->assertJsonPath('message', 'Pagamento já confirmado.')
-            ->assertJsonPath('status', 'validated');
+            ->assertJsonPath('code', 'CHARGE_ALREADY_PAID')
+            ->assertJsonPath('errors.status', 'validated');
     }
 
     public function test_submit_proof_does_not_match_wrong_exact_name(): void
@@ -382,8 +403,8 @@ class PublicExpenseTest extends TestCase
         ]);
 
         $response->assertOk()
-            ->assertJsonPath('expense.description', 'Churrasco atualizado')
-            ->assertJsonPath('expense.pix_key', 'pix@novo.com');
+            ->assertJsonPath('data.expense.description', 'Churrasco atualizado')
+            ->assertJsonPath('data.expense.pix_key', 'pix@novo.com');
 
         $this->assertDatabaseHas('expenses', [
             'public_hash' => 'test-hash-123',
@@ -522,8 +543,8 @@ class PublicExpenseTest extends TestCase
 
         $this->patchJson('/api/v1/public/expenses/test-hash-123/close?manage='.urlencode('manage-token-secret'))
             ->assertOk()
-            ->assertJsonPath('expense.status', 'closed')
-            ->assertJsonPath('expense.is_closed', true);
+            ->assertJsonPath('data.expense.status', 'closed')
+            ->assertJsonPath('data.expense.is_closed', true);
 
         $this->assertDatabaseHas('expenses', [
             'public_hash' => 'test-hash-123',

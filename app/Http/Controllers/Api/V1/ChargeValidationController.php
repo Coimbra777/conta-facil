@@ -2,108 +2,76 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Charge\ChargeActionAudience;
+use App\Actions\Charge\RejectChargeAction;
+use App\Actions\Charge\ValidateChargeAction;
+use App\Exceptions\HttpApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ChargeResource;
+use App\Http\Responses\ApiResponse;
 use App\Models\Charge;
-use App\Support\ChargeStatusTransition;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ChargeValidationController extends Controller
 {
-    public function validateCharge(Charge $charge): JsonResponse
+    public function validateCharge(Charge $charge, ValidateChargeAction $validateChargeAction): JsonResponse
     {
-        $authCheck = $this->authorizeAdmin($charge);
-        if ($authCheck) {
-            return $authCheck;
-        }
+        $this->authorizeAdmin($charge);
 
-        if ($charge->status !== 'proof_sent') {
-            return response()->json(['message' => 'Charge must have proof_sent status.'], 422);
-        }
+        $charge = $validateChargeAction->execute($charge, ChargeActionAudience::TEAM_ADMIN);
 
-        ChargeStatusTransition::assertTransition($charge->status, 'validated');
-
-        $charge->update([
-            'status' => 'validated',
-            'paid_at' => now(),
-            'rejection_reason' => null,
-        ]);
-
-        $charge->expense?->syncClosedStateFromCharges();
-
-        return response()->json([
-            'charge' => new ChargeResource($charge->load('teamMember')),
-        ]);
+        return ApiResponse::success([
+            'charge' => (new ChargeResource($charge->load('teamMember')))->resolve(),
+        ], 'Pagamento validado.');
     }
 
-    public function reject(Request $request, Charge $charge): JsonResponse
+    public function reject(Request $request, Charge $charge, RejectChargeAction $rejectChargeAction): JsonResponse
     {
-        $authCheck = $this->authorizeAdmin($charge);
-        if ($authCheck) {
-            return $authCheck;
-        }
+        $this->authorizeAdmin($charge);
 
-        if ($charge->status !== 'proof_sent') {
-            return response()->json(['message' => 'Charge must have proof_sent status.'], 422);
-        }
+        $charge = $rejectChargeAction->execute(
+            $charge,
+            $request->input('reason'),
+            ChargeActionAudience::TEAM_ADMIN,
+        );
 
-        ChargeStatusTransition::assertTransition($charge->status, 'rejected');
-
-        $reasonRaw = $request->input('reason');
-        $reason = is_string($reasonRaw) && trim($reasonRaw) !== ''
-            ? Str::limit(trim($reasonRaw), 2000)
-            : null;
-
-        $charge->update([
-            'status' => 'rejected',
-            'rejection_reason' => $reason,
-        ]);
-
-        $latestProof = $charge->latestProof();
-        if ($latestProof) {
-            $latestProof->update(['status' => 'rejected']);
-        }
-
-        return response()->json([
-            'charge' => new ChargeResource($charge->load('teamMember')),
-        ]);
+        return ApiResponse::success([
+            'charge' => (new ChargeResource($charge->load('teamMember')))->resolve(),
+        ], 'Comprovante rejeitado.');
     }
 
     public function downloadProof(Charge $charge): StreamedResponse|JsonResponse
     {
-        $authCheck = $this->authorizeAdmin($charge);
-        if ($authCheck) {
-            return $authCheck;
-        }
+        $this->authorizeAdmin($charge);
 
         $proof = $charge->latestProof();
         if (! $proof) {
-            return response()->json(['message' => 'No proof found.'], 404);
+            return ApiResponse::error('No proof found.', 'NOT_FOUND', 404);
         }
 
         return Storage::disk('local')->download($proof->file_path, $proof->original_filename);
     }
 
-    private function authorizeAdmin(Charge $charge): ?JsonResponse
+    /**
+     * @throws HttpApiException
+     */
+    private function authorizeAdmin(Charge $charge): void
     {
-        /** @var \App\Models\User $user */
+        /** @var \App\Models\User|null $user */
         $user = Auth::user();
 
         $expense = $charge->expense;
         if (! $expense) {
-            return response()->json(['message' => 'Not found.'], 404);
+            throw new HttpApiException('Not found.', 'NOT_FOUND', 404);
         }
 
         $membership = $expense->team->members()->where('user_id', $user->id)->first();
         if (! $membership || $membership->role !== 'admin') {
-            return response()->json(['message' => 'Forbidden.'], 403);
+            throw new HttpApiException('Forbidden.', 'FORBIDDEN', 403);
         }
-
-        return null;
     }
 }
