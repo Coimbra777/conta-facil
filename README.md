@@ -85,10 +85,15 @@ php artisan test
 
 ## Documentação
 
-- `doc/api.md` — API
-- `doc/frontend.md` — React/Vite e CORS
-- `doc/arquitetura.md` — visão geral
-- `doc/SECURITY.md` — revisão de segurança, rate limits, uploads, checklist de produção
+Índice: **[doc/README.md](doc/README.md)**
+
+- [doc/PROJECT_OVERVIEW.md](doc/PROJECT_OVERVIEW.md) — produto e fluxos
+- [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md) — arquitetura técnica
+- [doc/API.md](doc/API.md) — referência REST
+- [doc/BACKEND.md](doc/BACKEND.md) / [doc/FRONTEND.md](doc/FRONTEND.md)
+- [doc/SECURITY.md](doc/SECURITY.md) — segurança e OWASP
+- [doc/PRODUCTION_CHECKLIST.md](doc/PRODUCTION_CHECKLIST.md) — deploy
+- [doc/FUTURE_FEATURES.md](doc/FUTURE_FEATURES.md) — roadmap sugerido
 
 ## Deploy
 

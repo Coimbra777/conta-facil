@@ -26,7 +26,11 @@ export function PixKeyBox({ pixKey, pixKeyType, receiverName }: Props) {
                 <span className="font-bold">{receiverName}</span>
             </div>
 
-            <CopyButton value={pixKey} label="Copiar chave Pix" className="w-full text-base py-4" />
+            <CopyButton
+                value={pixKey}
+                label="Copiar chave Pix"
+                className="w-full text-base py-4"
+            />
         </div>
     );
 }

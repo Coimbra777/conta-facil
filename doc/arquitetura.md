@@ -1,5 +1,7 @@
 # Arquitetura do Sistema
 
+> **Nota:** documentação consolidada e alinhada ao código atual: **[ARCHITECTURE.md](./ARCHITECTURE.md)**. O texto abaixo pode conter referências legadas (ex.: Asaas).
+
 ## Visao Geral
 
 Sistema de divisao de despesas (Caixinha) com pagamento PIX via Asaas.

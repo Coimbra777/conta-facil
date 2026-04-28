@@ -288,6 +288,35 @@ function onUnauthorized(): never {
     });
 }
 
+/**
+ * Chamadas à API pública (sem sessão do organizador): não envia Bearer.
+ * Evita vazar token em endpoints abertos e impede logout/redirect em 401
+ * quando o participante usa o mesmo navegador que um usuário logado.
+ */
+async function publicV1Fetch<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+): Promise<T> {
+    const res = await fetch(`${BASE_URL}/api/v1${path}`, {
+        method,
+        headers:
+            body !== undefined
+                ? { "Content-Type": "application/json" }
+                : {},
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (res.status === 403) {
+        const json = (await readJson(res)) as Record<string, unknown>;
+        throw new ApiClientError(String(json.message ?? "Acesso negado."), {
+            status: 403,
+            code: "FORBIDDEN",
+        });
+    }
+    const json = await readJson(res);
+    return unwrapEnvelope<T>(json, res);
+}
+
 async function v1Fetch<T>(
     method: string,
     path: string,
@@ -536,7 +565,7 @@ export const api = {
     ) => {
         if (USE_MOCK) return mockApi.identifyParticipant(hash, name, phone);
         try {
-            const data = await v1Fetch<{
+            const data = await publicV1Fetch<{
                 status: ApiStatus;
                 rejection_reason?: string | null;
                 can_submit_proof?: boolean;
@@ -591,7 +620,6 @@ export const api = {
             },
         );
         const json = await readJson(res);
-        if (res.status === 401) onUnauthorized();
         if (!res.ok) {
             const o = json as Record<string, unknown>;
             if (o.success === false) {

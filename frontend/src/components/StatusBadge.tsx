@@ -22,7 +22,7 @@ export function StatusBadge({ status, className, size = "md" }: Props) {
                 "inline-flex items-center gap-1.5 border-2 border-foreground rounded-full font-bold uppercase tracking-wider whitespace-nowrap",
                 size === "sm" ? "text-[10px] px-2 py-0.5" : "text-xs px-3 py-1",
                 STYLES[status],
-                className
+                className,
             )}
         >
             <span className="size-1.5 rounded-full bg-current" />

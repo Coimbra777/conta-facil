@@ -10,7 +10,13 @@ export const STATUS_LABEL: Record<ApiStatus, string> = {
     rejected: "Rejeitado",
 };
 
-export type PixKeyType = "cpf" | "cnpj" | "email" | "phone" | "random" | "copia_cola";
+export type PixKeyType =
+    | "cpf"
+    | "cnpj"
+    | "email"
+    | "phone"
+    | "random"
+    | "copia_cola";
 
 export const PIX_KEY_LABEL: Record<PixKeyType, string> = {
     cpf: "CPF",

@@ -10,7 +10,12 @@ interface Props {
     onViewProof?: (p: Participant) => void;
 }
 
-export function ParticipantList({ participants, onApprove, onReject, onViewProof }: Props) {
+export function ParticipantList({
+    participants,
+    onApprove,
+    onReject,
+    onViewProof,
+}: Props) {
     if (participants.length === 0) {
         return (
             <div className="border-4 border-dashed border-foreground rounded-2xl p-8 text-center text-muted-foreground">
@@ -33,28 +38,38 @@ export function ParticipantList({ participants, onApprove, onReject, onViewProof
                         <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2 justify-between">
                                 <div className="min-w-0">
-                                    <div className="font-bold truncate">{p.name}</div>
-                                    <div className="text-sm text-muted-foreground truncate">{p.phone}</div>
+                                    <div className="font-bold truncate">
+                                        {p.name}
+                                    </div>
+                                    <div className="text-sm text-muted-foreground truncate">
+                                        {p.phone}
+                                    </div>
                                 </div>
                                 <StatusBadge status={p.status} />
                             </div>
                             <div className="mt-2 flex items-center gap-4 flex-wrap">
-                                <span className="font-display text-xl tabular-nums">{formatBRL(p.amount)}</span>
+                                <span className="font-display text-xl tabular-nums">
+                                    {formatBRL(p.amount)}
+                                </span>
                                 {p.proofSentAt && (
                                     <span className="text-xs text-muted-foreground">
-                                        Comprovante: {formatDateTime(p.proofSentAt)}
+                                        Comprovante:{" "}
+                                        {formatDateTime(p.proofSentAt)}
                                     </span>
                                 )}
                             </div>
                             {p.rejectionReason && (
                                 <div className="mt-2 text-sm border-l-4 border-status-rejected pl-3 text-foreground">
-                                    <span className="font-bold">Motivo:</span> {p.rejectionReason}
+                                    <span className="font-bold">Motivo:</span>{" "}
+                                    {p.rejectionReason}
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {(p.status === "proof_sent" || (p.status === "validated" && p.proofUrl) || p.status === "rejected") && (
+                    {(p.status === "proof_sent" ||
+                        (p.status === "validated" && p.proofUrl) ||
+                        p.status === "rejected") && (
                         <div className="flex flex-wrap gap-2 pt-2 border-t-2 border-dashed border-foreground/20">
                             {p.proofUrl && onViewProof && (
                                 <button

@@ -1,5 +1,7 @@
 # Frontend — React + Vite (SPA)
 
+> **Atualizado:** veja também **[FRONTEND.md](./FRONTEND.md)** (estrutura, client, variáveis, boas práticas).
+
 O frontend principal fica em `frontend/`. Ele consome a API Laravel em `/api/v1` com `Authorization: Bearer {token}` (Laravel Sanctum).
 
 ## Stack

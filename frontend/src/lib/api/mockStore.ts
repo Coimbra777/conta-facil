@@ -24,11 +24,46 @@ const seedExpense = (): Expense => ({
     organizerName: "Lucas Martins",
     createdAt: new Date(Date.now() - 2 * 86400000).toISOString(),
     participants: [
-        { id: "p1", name: "Lucas Martins", phone: "(11) 91234-5678", amount: 76.9, status: "validated", proofSentAt: new Date(Date.now() - 86400000).toISOString() },
-        { id: "p2", name: "Bia Rocha", phone: "(11) 99876-5432", amount: 76.9, status: "proof_sent", proofSentAt: new Date(Date.now() - 3600000).toISOString(), proofUrl: "/placeholder.svg" },
-        { id: "p3", name: "João Pedro", phone: "(21) 98888-1111", amount: 76.9, status: "pending" },
-        { id: "p4", name: "Marina Reis", phone: "(31) 97777-2222", amount: 76.9, status: "rejected", rejectionReason: "Comprovante ilegível, reenvie por favor.", proofSentAt: new Date(Date.now() - 7200000).toISOString() },
-        { id: "p5", name: "Thiago Costa", phone: "(41) 96666-3333", amount: 76.9, status: "pending" },
+        {
+            id: "p1",
+            name: "Lucas Martins",
+            phone: "(11) 91234-5678",
+            amount: 76.9,
+            status: "validated",
+            proofSentAt: new Date(Date.now() - 86400000).toISOString(),
+        },
+        {
+            id: "p2",
+            name: "Bia Rocha",
+            phone: "(11) 99876-5432",
+            amount: 76.9,
+            status: "proof_sent",
+            proofSentAt: new Date(Date.now() - 3600000).toISOString(),
+            proofUrl: "/placeholder.svg",
+        },
+        {
+            id: "p3",
+            name: "João Pedro",
+            phone: "(21) 98888-1111",
+            amount: 76.9,
+            status: "pending",
+        },
+        {
+            id: "p4",
+            name: "Marina Reis",
+            phone: "(31) 97777-2222",
+            amount: 76.9,
+            status: "rejected",
+            rejectionReason: "Comprovante ilegível, reenvie por favor.",
+            proofSentAt: new Date(Date.now() - 7200000).toISOString(),
+        },
+        {
+            id: "p5",
+            name: "Thiago Costa",
+            phone: "(41) 96666-3333",
+            amount: 76.9,
+            status: "pending",
+        },
     ],
 });
 
@@ -43,12 +78,21 @@ function load(): DB {
 }
 
 function save(db: DB) {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(db)); } catch {}
+    try {
+        localStorage.setItem(LS_KEY, JSON.stringify(db));
+    } catch {}
 }
 
-const uid = (prefix: string) => `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
+const uid = (prefix: string) =>
+    `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
 const slug = (s: string) =>
-    s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 30) || "cobranca";
+    s
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 30) || "cobranca";
 
 const delay = (ms = 350) => new Promise((r) => setTimeout(r, ms));
 
@@ -66,7 +110,11 @@ export const mockApi = {
     async login(email: string, _password: string) {
         await delay();
         const db = load();
-        const user: User = db.user ?? { id: uid("u"), name: email.split("@")[0], email };
+        const user: User = db.user ?? {
+            id: uid("u"),
+            name: email.split("@")[0],
+            email,
+        };
         db.user = user;
         save(db);
         localStorage.setItem(LS_AUTH, "mock-token-" + user.id);
@@ -140,7 +188,11 @@ export const mockApi = {
             p.rejectionReason = undefined;
         });
     },
-    async rejectParticipant(expenseId: string, participantId: string, reason: string) {
+    async rejectParticipant(
+        expenseId: string,
+        participantId: string,
+        reason: string,
+    ) {
         await delay(200);
         return updateParticipant(expenseId, participantId, (p) => {
             p.status = "rejected";
@@ -158,7 +210,7 @@ export const mockApi = {
         let p = exp.participants.find(
             (x) =>
                 x.name.toLowerCase().trim() === name.toLowerCase().trim() ||
-                (phone && norm(x.phone) === norm(phone))
+                (phone && norm(x.phone) === norm(phone)),
         );
         if (!p) {
             // Permite auto-cadastro com valor 0 se desejado; aqui exigimos match.
@@ -183,7 +235,11 @@ export const mockApi = {
     },
 };
 
-function updateParticipant(expenseId: string, participantId: string, mut: (p: Participant) => void) {
+function updateParticipant(
+    expenseId: string,
+    participantId: string,
+    mut: (p: Participant) => void,
+) {
     const db = load();
     const exp = db.expenses.find((e) => e.id === expenseId);
     if (!exp) return null;

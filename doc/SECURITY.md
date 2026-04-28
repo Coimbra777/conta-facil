@@ -182,3 +182,25 @@ npm run build
 
 - **`npm audit fix --force`**: pode atualizar major versions; avaliar em branch dedicada.
 - **Cookies HttpOnly** em vez de localStorage exigiria fluxo Sanctum SPA diferente do Bearer atual — fora do escopo pedido.
+
+---
+
+## Atualização — revisão frontend (rotas públicas)
+
+- **`publicV1Fetch` em `frontend/src/lib/api/client.ts`:** `POST /public/expenses/{hash}/validate-participant` não envia mais header `Authorization`. Isso evita (1) vazar o Bearer do organizador para um endpoint público quando participante e organizador usam o mesmo navegador e (2) respostas **401** no upload/identificação que disparavam `onUnauthorized()` e apagavam a sessão do painel.
+- **`submitProof`:** removido tratamento que chamava `onUnauthorized()` em **401** no fluxo público; comprovante não deve deslogar o organizador por engano.
+- **XSS — `chart.tsx`:** uso de `dangerouslySetInnerHTML` limitado a CSS gerado a partir de configuração de tema/cores do próprio componente (não dados da API). Manter assim; não reutilizar o padrão para texto de usuário.
+
+---
+
+## OWASP — estado atual (resumo)
+
+As verificações da tabela na seção “OWASP Top 10” permanecem válidas. Pendências típicas: **npm** (cadeia de build/dev), padronizar **auth** no envelope `ApiResponse`, **CSP** no HTML da SPA se quiser camada extra contra XSS.
+
+---
+
+## Referência cruzada
+
+- Checklist operacional: [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md)
+- Visão de arquitetura e fluxos: [ARCHITECTURE.md](./ARCHITECTURE.md)
+

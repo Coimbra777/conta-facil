@@ -1,4 +1,10 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+    createContext,
+    useContext,
+    useEffect,
+    useState,
+    type ReactNode,
+} from "react";
 import { api } from "@/lib/api/client";
 import type { User } from "@/lib/types";
 
@@ -17,15 +23,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        api.me().then((u) => setUser(u)).finally(() => setLoading(false));
+        api.me()
+            .then((u) => setUser(u))
+            .finally(() => setLoading(false));
     }, []);
 
     const value: AuthCtx = {
         user,
         loading,
-        login: async (email, password) => { setUser(await api.login(email, password)); },
-        register: async (name, email, password) => { setUser(await api.register(name, email, password)); },
-        logout: async () => { await api.logout(); setUser(null); },
+        login: async (email, password) => {
+            setUser(await api.login(email, password));
+        },
+        register: async (name, email, password) => {
+            setUser(await api.register(name, email, password));
+        },
+        logout: async () => {
+            await api.logout();
+            setUser(null);
+        },
     };
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
