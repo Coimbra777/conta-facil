@@ -11,12 +11,19 @@ import { mockApi } from "./mockStore";
 
 const BASE_URL_RAW = import.meta.env.VITE_API_BASE_URL as string | undefined;
 
+/**
+ * Base para `/api/v1`: URL explícita (`.env`), ou em dev `http://localhost:8000`,
+ * ou string vazia → mesma origem do SPA (build servido pelo Laravel em `/`).
+ */
+function resolveApiBaseUrl(): string {
+    const raw = BASE_URL_RAW?.trim();
+    if (raw) return raw.replace(/\/+$/, "");
+    if (import.meta.env.DEV) return "http://localhost:8000";
+    return "";
+}
+
 /** Modo demonstração explícito (UI); fluxos protegidos usam mock local sem Bearer falso. */
 const DEMO_MODE_KEY = "contacerta:demo:v1";
-
-export function hasRealApiConfigured(): boolean {
-    return Boolean(BASE_URL_RAW?.trim());
-}
 
 export function isDemoMode(): boolean {
     try {
@@ -40,9 +47,9 @@ function useMockForProtected(): boolean {
     return isDemoMode();
 }
 
-/** Links públicos (/p/…): mock em demo ou quando não há URL de API (deploy estático). */
+/** Links públicos (/p/…): mock só em modo demo. */
 function useMockForPublic(): boolean {
-    return isDemoMode() || !hasRealApiConfigured();
+    return isDemoMode();
 }
 
 const TOKEN_KEY = "contacerta:auth:v1";
@@ -72,14 +79,7 @@ export class ApiClientError extends Error {
 }
 
 function getRealBaseUrl(): string {
-    const u = BASE_URL_RAW?.trim();
-    if (!u) {
-        throw new ApiClientError(
-            "Configure VITE_API_BASE_URL para usar login e API reais.",
-            { code: "NO_API_BASE" },
-        );
-    }
-    return u;
+    return resolveApiBaseUrl();
 }
 
 function authHeaders(json = false): HeadersInit {
@@ -296,7 +296,7 @@ async function authLogin(email: string, password: string): Promise<User> {
 }
 
 async function authMe(): Promise<User | null> {
-    if (!hasRealApiConfigured() || isDemoMode()) return null;
+    if (isDemoMode()) return null;
     if (!getToken()) return null;
     const base = getRealBaseUrl();
     const res = await fetch(`${base}/api/v1/auth/me`, {
@@ -319,10 +319,6 @@ async function authMe(): Promise<User | null> {
 async function authLogout(): Promise<void> {
     const t = getToken();
     if (!t) return;
-    if (!hasRealApiConfigured()) {
-        setToken(null);
-        return;
-    }
     const base = getRealBaseUrl();
     try {
         await fetch(`${base}/api/v1/auth/logout`, {
@@ -357,9 +353,7 @@ async function publicV1Fetch<T>(
     const res = await fetch(`${base}/api/v1${path}`, {
         method,
         headers:
-            body !== undefined
-                ? { "Content-Type": "application/json" }
-                : {},
+            body !== undefined ? { "Content-Type": "application/json" } : {},
         body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     if (res.status === 403) {
@@ -458,8 +452,7 @@ export const api = {
             ? mockApi.login(email, password)
             : authLogin(email, password),
 
-    me: (): Promise<User | null> =>
-        isDemoMode() ? mockApi.me() : authMe(),
+    me: (): Promise<User | null> => (isDemoMode() ? mockApi.me() : authMe()),
 
     logout: (): Promise<boolean> =>
         useMockForProtected()
@@ -600,9 +593,7 @@ export const api = {
             manageToken !== ""
                 ? `?manage=${encodeURIComponent(manageToken)}`
                 : "";
-        const res = await fetch(
-            `${base}/api/v1/public/expenses/${hash}${q}`,
-        );
+        const res = await fetch(`${base}/api/v1/public/expenses/${hash}${q}`);
         const json = await readJson(res);
         if (res.status === 404) return null;
         if (res.status === 403) return null;

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ApiClientError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth";
 
 interface Props { mode: "login" | "register" }
@@ -39,17 +38,11 @@ export default function AuthPage({ mode }: Props) {
             else await login(email.trim(), password);
             nav(redirect);
         } catch (e: unknown) {
-            if (e instanceof ApiClientError && e.code === "NO_API_BASE") {
-                setErr(
-                    "Servidor da API não configurado. Defina VITE_API_BASE_URL no frontend e gere o build de novo.",
-                );
-            } else {
-                setErr(
-                    e instanceof Error
-                        ? e.message
-                        : "Não foi possível continuar. Tente novamente.",
-                );
-            }
+            setErr(
+                e instanceof Error
+                    ? e.message
+                    : "Não foi possível continuar. Tente novamente.",
+            );
         } finally {
             setLoading(false);
         }
