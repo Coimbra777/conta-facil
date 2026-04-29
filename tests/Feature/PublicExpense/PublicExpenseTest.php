@@ -161,6 +161,30 @@ class PublicExpenseTest extends TestCase
             ]);
     }
 
+    public function test_public_expense_with_manage_header_returns_members_and_can_manage(): void
+    {
+        $this->createExpenseWithCharges();
+
+        $response = $this->getJson('/api/v1/public/expenses/test-hash-123', [
+            'X-Manage-Token' => 'manage-token-secret',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('data.expense.can_manage', true)
+            ->assertJsonCount(2, 'data.expense.members');
+    }
+
+    public function test_manage_token_header_takes_precedence_over_query_string(): void
+    {
+        $this->createExpenseWithCharges();
+
+        $response = $this->getJson('/api/v1/public/expenses/test-hash-123?manage='.urlencode('wrong-token'), [
+            'X-Manage-Token' => 'manage-token-secret',
+        ]);
+
+        $response->assertOk()->assertJsonPath('data.expense.can_manage', true);
+    }
+
     public function test_invalid_hash_returns_404(): void
     {
         $response = $this->getJson('/api/v1/public/expenses/invalid-hash');
@@ -509,7 +533,10 @@ class PublicExpenseTest extends TestCase
 
         $this->patchJson('/api/v1/public/expenses/test-hash-123/close')
             ->assertForbidden()
-            ->assertJsonPath('message', 'Forbidden.');
+            ->assertJsonPath(
+                'message',
+                'Você não tem permissão para realizar esta ação.',
+            );
     }
 
     public function test_close_expense_rejects_when_any_charge_not_validated(): void

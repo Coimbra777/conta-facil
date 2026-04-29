@@ -95,7 +95,10 @@ class AuthTest extends TestCase
         ]);
 
         $response->assertStatus(401)
-            ->assertJson(['message' => 'Invalid credentials.']);
+            ->assertJson([
+                'message' => 'E-mail ou senha inválidos.',
+                'code' => 'INVALID_CREDENTIALS',
+            ]);
     }
 
     public function test_authenticated_user_can_access_me(): void
@@ -135,7 +138,7 @@ class AuthTest extends TestCase
             ->postJson('/api/v1/auth/logout');
 
         $response->assertOk()
-            ->assertJson(['message' => 'Successfully logged out.']);
+            ->assertJson(['message' => 'Você saiu da conta.']);
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }

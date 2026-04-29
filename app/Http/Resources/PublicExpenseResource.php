@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Support\ManageTokenResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -9,7 +10,7 @@ class PublicExpenseResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $manageToken = $request->query('manage');
+        $manageToken = ManageTokenResolver::resolve($request);
         $manageOk = $manageToken && hash_equals((string) $this->manage_token, (string) $manageToken);
 
         if ($manageOk) {

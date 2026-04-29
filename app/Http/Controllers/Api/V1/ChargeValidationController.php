@@ -69,12 +69,16 @@ class ChargeValidationController extends Controller
 
         $expense = $charge->expense;
         if (! $expense) {
-            throw new HttpApiException('Not found.', 'NOT_FOUND', 404);
+            throw new HttpApiException('Registro não encontrado.', 'NOT_FOUND', 404);
         }
 
         $membership = $expense->team->members()->where('user_id', $user->id)->first();
         if (! $membership || $membership->role !== 'admin') {
-            throw new HttpApiException('Forbidden.', 'FORBIDDEN', 403);
+            throw new HttpApiException(
+                'Você não tem permissão para realizar esta ação.',
+                'FORBIDDEN',
+                403,
+            );
         }
     }
 }

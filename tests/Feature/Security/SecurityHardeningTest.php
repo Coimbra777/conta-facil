@@ -57,7 +57,10 @@ class SecurityHardeningTest extends TestCase
 
         $this->patchJson('/api/v1/public/expenses/sec-hash-1/close?manage='.urlencode('token-invalido'))
             ->assertForbidden()
-            ->assertJsonPath('message', 'Forbidden.');
+            ->assertJsonPath(
+                'message',
+                'Você não tem permissão para realizar esta ação.',
+            );
     }
 
     public function test_login_is_rate_limited(): void

@@ -57,7 +57,7 @@ class TeamController extends Controller
         $user = Auth::user();
 
         if (! $team->members()->where('user_id', $user->id)->exists()) {
-            return response()->json(['message' => 'Forbidden.'], 403);
+            return response()->json(['message' => 'Você não tem permissão para realizar esta ação.'], 403);
         }
 
         $team->load('owner', 'members');
@@ -74,7 +74,7 @@ class TeamController extends Controller
         $user = Auth::user();
 
         if (! $team->members()->where('user_id', $user->id)->exists()) {
-            return response()->json(['message' => 'Forbidden.'], 403);
+            return response()->json(['message' => 'Você não tem permissão para realizar esta ação.'], 403);
         }
 
         $expenseIds = $team->expenses()->pluck('id');

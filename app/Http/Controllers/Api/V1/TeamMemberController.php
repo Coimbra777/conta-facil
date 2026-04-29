@@ -20,7 +20,7 @@ class TeamMemberController extends Controller
 
         $membership = $team->members()->where('user_id', $authUser->id)->first();
         if (!$membership || $membership->role !== 'admin') {
-            return response()->json(['message' => 'Forbidden.'], 403);
+            return response()->json(['message' => 'Você não tem permissão para realizar esta ação.'], 403);
         }
 
         $data = $request->validated();
@@ -43,11 +43,11 @@ class TeamMemberController extends Controller
 
         $membership = $team->members()->where('user_id', $authUser->id)->first();
         if (!$membership || $membership->role !== 'admin') {
-            return response()->json(['message' => 'Forbidden.'], 403);
+            return response()->json(['message' => 'Você não tem permissão para realizar esta ação.'], 403);
         }
 
         if ($member->team_id !== $team->id) {
-            return response()->json(['message' => 'Not found.'], 404);
+            return response()->json(['message' => 'Registro não encontrado.'], 404);
         }
 
         if ($member->user_id === $team->owner_id) {

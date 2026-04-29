@@ -10,6 +10,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -54,7 +55,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            return ApiResponse::error('Not found.', 'NOT_FOUND', 404);
+            return ApiResponse::error('Registro não encontrado.', 'NOT_FOUND', 404);
         });
 
         $exceptions->render(function (ModelNotFoundException $e, Request $request) {
@@ -62,7 +63,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            return ApiResponse::error('Not found.', 'NOT_FOUND', 404);
+            return ApiResponse::error('Registro não encontrado.', 'NOT_FOUND', 404);
         });
 
         $exceptions->render(function (AuthenticationException $e, Request $request) {
@@ -70,7 +71,27 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
-            return ApiResponse::error('Unauthenticated.', 'UNAUTHENTICATED', 401);
+            return ApiResponse::error(
+                'Sua sessão expirou. Faça login novamente.',
+                'UNAUTHENTICATED',
+                401,
+            );
+        });
+
+        $exceptions->render(function (HttpExceptionInterface $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            if ($e->getStatusCode() !== 429) {
+                return null;
+            }
+
+            return ApiResponse::error(
+                'Muitas tentativas. Tente novamente em instantes.',
+                'TOO_MANY_REQUESTS',
+                429,
+            );
         });
 
         $exceptions->render(function (\DomainException $e, Request $request) {

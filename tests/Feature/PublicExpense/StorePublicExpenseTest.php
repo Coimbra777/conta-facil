@@ -37,6 +37,11 @@ class StorePublicExpenseTest extends TestCase
                 ],
             ]);
 
+        $managePath = $response->json('data.expense.manage_path');
+        $this->assertIsString($managePath);
+        $this->assertStringStartsWith('/p/', $managePath);
+        $this->assertStringNotContainsString('manage=', $managePath);
+
         $this->assertDatabaseHas('expenses', [
             'description' => 'Churras',
             'owner_name' => 'Ana',

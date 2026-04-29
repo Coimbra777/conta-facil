@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, isPublicExpenseUsingMock } from "@/lib/api/client";
 import { mockApi } from "@/lib/api/mockStore";
 import type { Expense, Participant } from "@/lib/types";
 import { PixKeyBox } from "@/components/PixKeyBox";
 import { ProofUpload } from "@/components/ProofUpload";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatBRL, initials } from "@/lib/format";
+import { CopyButton } from "@/components/CopyButton";
+import { formatBRL, initials, buildPublicLink } from "@/lib/format";
 import { digitsOnly, formatBrazilPhoneDisplay } from "@/lib/inputMasks";
+import {
+    getPublicManageToken,
+    setPublicManageToken,
+} from "@/lib/publicManageToken";
 import { CheckCircle2, Clock, Smartphone, AlertTriangle } from "lucide-react";
 
 const IDENTIFY_ERROR_MAIN =
@@ -15,8 +20,8 @@ const IDENTIFY_ERROR_MAIN =
 
 export default function PublicExpense() {
     const { hash = "" } = useParams();
+    const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const manageToken = searchParams.get("manage");
     const [exp, setExp] = useState<Expense | null | undefined>(undefined);
     const [name, setName] = useState("");
     const [phone, setPhone] = useState("");
@@ -34,8 +39,30 @@ export default function PublicExpense() {
         Boolean(identifyError) && isPublicExpenseUsingMock(hash);
 
     useEffect(() => {
-        api.getPublicExpense(hash, manageToken).then(setExp);
-    }, [hash, manageToken]);
+        if (typeof window !== "undefined") {
+            const h = window.location.hash;
+            if (h.startsWith("#manage=")) {
+                const raw = h.slice("#manage=".length);
+                const token = decodeURIComponent(raw.replace(/\+/g, "%20"));
+                if (token) setPublicManageToken(hash, token);
+                window.history.replaceState(
+                    null,
+                    "",
+                    window.location.pathname + window.location.search,
+                );
+            }
+        }
+
+        const legacyQuery = searchParams.get("manage");
+        if (legacyQuery) {
+            setPublicManageToken(hash, legacyQuery);
+            navigate(`/p/${hash}`, { replace: true });
+            return;
+        }
+
+        const token = getPublicManageToken(hash);
+        api.getPublicExpense(hash, token).then(setExp);
+    }, [hash, searchParams, navigate]);
 
     const identify = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -53,7 +80,7 @@ export default function PublicExpense() {
                 hash,
                 name.trim(),
                 phoneDigits,
-                manageToken,
+                getPublicManageToken(hash),
             );
             if (!result) {
                 setIdentifyError(IDENTIFY_ERROR_MAIN);
@@ -152,6 +179,38 @@ export default function PublicExpense() {
                     </div>
                 </div>
             </header>
+
+            {exp.canManage ? (
+                <div className="px-5 sm:px-6 pt-4 max-w-md mx-auto w-full">
+                    <div className="rounded-xl border-2 border-dashed border-foreground/40 bg-muted/50 px-4 py-3 text-sm flex flex-col gap-3">
+                        <p className="font-bold uppercase text-xs tracking-widest text-muted-foreground">
+                            Modo organizador
+                        </p>
+                        <p className="leading-snug">
+                            Compartilhe apenas o{" "}
+                            <strong>link público</strong> com quem vai pagar. O{" "}
+                            <strong>token de gestão</strong> concede controle da
+                            cobrança — envie por canal privado (mensagem direta,
+                            cofre de senhas), nunca junto com o link público.
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+                            <CopyButton
+                                value={buildPublicLink(hash)}
+                                label="Copiar link público"
+                                className="flex-1 text-sm py-3"
+                            />
+                            {getPublicManageToken(hash) ? (
+                                <CopyButton
+                                    value={getPublicManageToken(hash)!}
+                                    label="Copiar token de gestão"
+                                    variant="ghost"
+                                    className="flex-1 text-sm py-3"
+                                />
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+            ) : null}
 
             <main className="px-5 sm:px-6 py-6 max-w-md mx-auto flex flex-col gap-5">
                 {!participant ? (

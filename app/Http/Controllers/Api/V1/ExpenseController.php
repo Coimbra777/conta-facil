@@ -28,7 +28,11 @@ class ExpenseController extends Controller
 
         $membership = $team->members()->where('user_id', $user->id)->first();
         if (! $membership || $membership->role !== 'admin') {
-            throw new HttpApiException('Forbidden.', 'FORBIDDEN', 403);
+            throw new HttpApiException(
+                'Você não tem permissão para realizar esta ação.',
+                'FORBIDDEN',
+                403,
+            );
         }
 
         $expense = $createExpenseAction->execute($team, $user, $request->validated());
@@ -44,7 +48,11 @@ class ExpenseController extends Controller
         $user = Auth::user();
 
         if (! $team->members()->where('user_id', $user->id)->exists()) {
-            throw new HttpApiException('Forbidden.', 'FORBIDDEN', 403);
+            throw new HttpApiException(
+                'Você não tem permissão para realizar esta ação.',
+                'FORBIDDEN',
+                403,
+            );
         }
 
         $expenses = $team->expenses()
@@ -67,11 +75,15 @@ class ExpenseController extends Controller
         $user = Auth::user();
 
         if (! $team->members()->where('user_id', $user->id)->exists()) {
-            throw new HttpApiException('Forbidden.', 'FORBIDDEN', 403);
+            throw new HttpApiException(
+                'Você não tem permissão para realizar esta ação.',
+                'FORBIDDEN',
+                403,
+            );
         }
 
         if ($expense->team_id !== $team->id) {
-            throw new HttpApiException('Not found.', 'NOT_FOUND', 404);
+            throw new HttpApiException('Registro não encontrado.', 'NOT_FOUND', 404);
         }
 
         $expense->load('charges.teamMember', 'charges.paymentProofs');
@@ -124,7 +136,11 @@ class ExpenseController extends Controller
         $user = Auth::user();
 
         if (! $expense->team->members()->where('user_id', $user->id)->exists()) {
-            throw new HttpApiException('Forbidden.', 'FORBIDDEN', 403);
+            throw new HttpApiException(
+                'Você não tem permissão para realizar esta ação.',
+                'FORBIDDEN',
+                403,
+            );
         }
 
         $expense->load('charges.teamMember', 'charges.paymentProofs');
@@ -141,7 +157,11 @@ class ExpenseController extends Controller
 
         $membership = $expense->team->members()->where('user_id', $user->id)->first();
         if (! $membership || $membership->role !== 'admin') {
-            throw new HttpApiException('Forbidden.', 'FORBIDDEN', 403);
+            throw new HttpApiException(
+                'Você não tem permissão para realizar esta ação.',
+                'FORBIDDEN',
+                403,
+            );
         }
 
         $expense->load('charges.teamMember', 'charges.paymentProofs');

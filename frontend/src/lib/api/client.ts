@@ -207,7 +207,21 @@ function mapPublicExpenseFromApi(e: Record<string, unknown>): Expense {
             ? String(e.created_at)
             : new Date().toISOString(),
         participants,
+        canManage: Boolean(e.can_manage ?? false),
     };
+}
+
+function manageTokenHeaders(
+    manageToken?: string | null,
+): Record<string, string> {
+    if (
+        manageToken === undefined ||
+        manageToken === null ||
+        manageToken === ""
+    ) {
+        return {};
+    }
+    return { "X-Manage-Token": manageToken };
 }
 
 async function readJson(res: Response): Promise<unknown> {
@@ -307,7 +321,10 @@ async function authLogin(email: string, password: string): Promise<User> {
     if (!res.ok) {
         throw apiErr(String(json.message ?? "Credenciais inválidas."), {
             status: res.status,
-            code: "UNAUTHENTICATED",
+            code:
+                typeof json.code === "string"
+                    ? json.code
+                    : "INVALID_CREDENTIALS",
         });
     }
     const user = json.user as Record<string, unknown>;
@@ -609,13 +626,9 @@ export const api = {
     ): Promise<Expense | null> => {
         if (usePublicMock(hash)) return mockApi.getExpenseByHash(hash);
         const base = getRealBaseUrl();
-        const q =
-            manageToken !== undefined &&
-            manageToken !== null &&
-            manageToken !== ""
-                ? `?manage=${encodeURIComponent(manageToken)}`
-                : "";
-        const res = await fetch(`${base}/api/v1/public/expenses/${hash}${q}`);
+        const res = await fetch(`${base}/api/v1/public/expenses/${hash}`, {
+            headers: manageTokenHeaders(manageToken),
+        });
         const json = await readJson(res);
         if (res.status === 404) return null;
         if (res.status === 403) return null;

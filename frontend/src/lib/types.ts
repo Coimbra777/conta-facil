@@ -59,6 +59,8 @@ export interface Expense {
     organizerName: string;
     participants: Participant[];
     createdAt: string;
+    /** Resposta pública com token de gestão válido (header). */
+    canManage?: boolean;
 }
 
 export interface ApiSuccess<T> {

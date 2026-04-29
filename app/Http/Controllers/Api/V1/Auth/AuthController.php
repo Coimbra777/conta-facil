@@ -26,9 +26,10 @@ class AuthController extends Controller
 
     public function login(LoginRequest $request): JsonResponse
     {
-        if (!Auth::attempt($request->only('email', 'password'))) {
+        if (! Auth::attempt($request->only('email', 'password'))) {
             return response()->json([
-                'message' => 'Invalid credentials.',
+                'message' => 'E-mail ou senha inválidos.',
+                'code' => 'INVALID_CREDENTIALS',
             ], 401);
         }
 
@@ -51,7 +52,7 @@ class AuthController extends Controller
         $user->currentAccessToken()->delete();
 
         return response()->json([
-            'message' => 'Successfully logged out.',
+            'message' => 'Você saiu da conta.',
         ]);
     }
 

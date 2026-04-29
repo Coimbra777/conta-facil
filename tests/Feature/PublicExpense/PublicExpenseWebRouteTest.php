@@ -16,7 +16,7 @@ class PublicExpenseWebRouteTest extends TestCase
         $response->assertRedirect("/p/{$hash}");
     }
 
-    public function test_public_expense_with_manage_redirects_to_spa_with_query(): void
+    public function test_public_expense_legacy_redirect_puts_manage_in_fragment(): void
     {
         $hash = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
         $token = 'test-manage-token';
@@ -24,7 +24,7 @@ class PublicExpenseWebRouteTest extends TestCase
         $response = $this->get("/public/expenses/{$hash}?manage=".urlencode($token));
 
         $response->assertStatus(302);
-        $response->assertRedirect("/p/{$hash}?manage=".urlencode($token));
+        $response->assertRedirect('/p/'.$hash.'#manage='.rawurlencode($token));
     }
 
     public function test_participant_path_returns_spa_shell(): void

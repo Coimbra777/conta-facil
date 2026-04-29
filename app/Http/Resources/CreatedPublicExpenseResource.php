@@ -10,15 +10,13 @@ class CreatedPublicExpenseResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        $manageQuery = '?manage='.urlencode($this->manage_token);
-
         return [
             'id' => $this->id,
             'public_hash' => $this->public_hash,
             'manage_token' => $this->manage_token,
             'public_url' => $this->getPublicUrl(),
-            'manage_url' => $this->getManageUrl(),
-            'manage_path' => '/public/expenses/'.$this->public_hash.$manageQuery,
+            'manage_url' => $this->getPublicUrl(),
+            'manage_path' => '/p/'.$this->public_hash,
         ];
     }
 }

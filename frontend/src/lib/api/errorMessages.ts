@@ -4,6 +4,7 @@
 
 const BY_MESSAGE: Record<string, string> = {
     "Invalid credentials.": "E-mail ou senha inválidos.",
+    "E-mail ou senha inválidos.": "E-mail ou senha inválidos.",
     "Unauthenticated.": "Sua sessão expirou. Faça login novamente.",
     "Successfully logged out.": "Você saiu da conta.",
     "Forbidden.": "Você não tem permissão para realizar esta ação.",
@@ -12,6 +13,9 @@ const BY_MESSAGE: Record<string, string> = {
 };
 
 const BY_CODE: Record<string, string> = {
+    INVALID_CREDENTIALS: "E-mail ou senha inválidos.",
+    TOO_MANY_REQUESTS:
+        "Muitas tentativas. Tente novamente em instantes.",
     UNAUTHENTICATED: "Sua sessão expirou. Faça login novamente.",
     FORBIDDEN: "Você não tem permissão para realizar esta ação.",
     NOT_FOUND: "Registro não encontrado.",
@@ -32,7 +36,7 @@ export function mapHttpStatusToMessage(status?: number): string | undefined {
         case 422:
             return "Verifique os campos informados.";
         case 429:
-            return "Muitas tentativas. Aguarde um momento e tente de novo.";
+            return "Muitas tentativas. Tente novamente em instantes.";
         case 500:
         case 502:
         case 503:

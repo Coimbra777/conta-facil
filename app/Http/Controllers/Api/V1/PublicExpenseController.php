@@ -188,7 +188,7 @@ class PublicExpenseController extends Controller
         $expense = Expense::byHash($hash)->first();
 
         if (! $expense) {
-            return ApiResponse::error('Not found.', 'NOT_FOUND', 404);
+            return ApiResponse::error('Registro não encontrado.', 'NOT_FOUND', 404);
         }
 
         $this->assertExpenseOpen($expense);
