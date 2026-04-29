@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { DEMO_PRESENTATION_PUBLIC_HASH } from "@/lib/api/mockStore";
 import { ArrowRight, CheckCircle2, ClipboardList, MessageSquareText, PiggyBank, Plane, Users2, PartyPopper, Trophy, Home } from "lucide-react";
 
 export default function Landing() {
@@ -46,7 +47,7 @@ export default function Landing() {
                             Criar cobrança <ArrowRight className="size-5" />
                         </Link>
                         <Link
-                            to="/p/demo-churrasco-2025"
+                            to={`/p/${DEMO_PRESENTATION_PUBLIC_HASH}`}
                             className="bg-card text-foreground font-bold text-base sm:text-lg px-6 sm:px-8 py-4 border-4 border-foreground rounded-xl brutal-press brutal-press-md text-center w-full sm:w-auto"
                         >
                             Ver exemplo

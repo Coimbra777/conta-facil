@@ -7,7 +7,7 @@ import type {
     PixKeyType,
     User,
 } from "../types";
-import { mockApi } from "./mockStore";
+import { mockApi, isDemoPresentationPublicHash } from "./mockStore";
 
 const BASE_URL_RAW = import.meta.env.VITE_API_BASE_URL as string | undefined;
 
@@ -47,9 +47,9 @@ function useMockForProtected(): boolean {
     return isDemoMode();
 }
 
-/** Links públicos (/p/…): mock só em modo demo. */
-function useMockForPublic(): boolean {
-    return isDemoMode();
+/** Rotas públicas /p/:hash: mock em modo demo ou nos hashes de apresentação (seed da landing). */
+function usePublicMock(hash: string): boolean {
+    return isDemoMode() || isDemoPresentationPublicHash(hash);
 }
 
 const TOKEN_KEY = "contacerta:auth:v1";
@@ -585,7 +585,7 @@ export const api = {
         hash: string,
         manageToken?: string | null,
     ): Promise<Expense | null> => {
-        if (useMockForPublic()) return mockApi.getExpenseByHash(hash);
+        if (usePublicMock(hash)) return mockApi.getExpenseByHash(hash);
         const base = getRealBaseUrl();
         const q =
             manageToken !== undefined &&
@@ -614,7 +614,7 @@ export const api = {
         phone: string,
         manageToken?: string | null,
     ) => {
-        if (useMockForPublic())
+        if (usePublicMock(hash))
             return mockApi.identifyParticipant(hash, name, phone);
         try {
             const data = await publicV1Fetch<{
@@ -659,7 +659,7 @@ export const api = {
         participant: Participant,
         file: File,
     ): Promise<Participant | null> => {
-        if (useMockForPublic())
+        if (usePublicMock(hash))
             return mockApi.submitProof(hash, participant, file);
         const base = getRealBaseUrl();
         const fd = new FormData();

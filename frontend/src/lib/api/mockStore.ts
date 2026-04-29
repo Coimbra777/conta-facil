@@ -7,6 +7,13 @@ const LS_KEY = "contacerta:mock:v1";
 /** Sessão mock isolada — nunca usar a mesma chave do token Sanctum (`contacerta:auth:v1`). */
 const MOCK_SESSION_KEY = "contacerta:mock-session:v1";
 
+/** Hash público da cobrança seed na landing / modo apresentação — não existe na API real. */
+export const DEMO_PRESENTATION_PUBLIC_HASH = "demo-churrasco-2025";
+
+export function isDemoPresentationPublicHash(hash: string): boolean {
+    return hash === DEMO_PRESENTATION_PUBLIC_HASH;
+}
+
 function hasMockSession(): boolean {
     try {
         return localStorage.getItem(MOCK_SESSION_KEY) === "1";
@@ -29,7 +36,7 @@ interface DB {
 
 const seedExpense = (): Expense => ({
     id: "exp_demo_1",
-    publicHash: "demo-churrasco-2025",
+    publicHash: DEMO_PRESENTATION_PUBLIC_HASH,
     title: "Churrasco da galera 🔥",
     description: "Carne, carvão e bebida pro sábado.",
     totalAmount: 384.5,
