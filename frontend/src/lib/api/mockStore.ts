@@ -4,7 +4,23 @@
 import type { Expense, Participant, PixKeyType, User } from "../types";
 
 const LS_KEY = "contacerta:mock:v1";
-const LS_AUTH = "contacerta:auth:v1";
+/** Sessão mock isolada — nunca usar a mesma chave do token Sanctum (`contacerta:auth:v1`). */
+const MOCK_SESSION_KEY = "contacerta:mock-session:v1";
+
+function hasMockSession(): boolean {
+    try {
+        return localStorage.getItem(MOCK_SESSION_KEY) === "1";
+    } catch {
+        return false;
+    }
+}
+
+function setMockSession(on: boolean) {
+    try {
+        if (on) localStorage.setItem(MOCK_SESSION_KEY, "1");
+        else localStorage.removeItem(MOCK_SESSION_KEY);
+    } catch {}
+}
 
 interface DB {
     user: User | null;
@@ -104,7 +120,7 @@ export const mockApi = {
         const user: User = { id: uid("u"), name, email };
         db.user = user;
         save(db);
-        localStorage.setItem(LS_AUTH, "mock-token-" + user.id);
+        setMockSession(true);
         return user;
     },
     async login(email: string, _password: string) {
@@ -117,17 +133,30 @@ export const mockApi = {
         };
         db.user = user;
         save(db);
-        localStorage.setItem(LS_AUTH, "mock-token-" + user.id);
+        setMockSession(true);
+        return user;
+    },
+    /** Entra na sessão demo sem e-mail/senha (apresentação). */
+    async enterDemo() {
+        await delay(150);
+        const db = load();
+        const user: User = {
+            id: "demo_visitor",
+            name: "Visitante (demonstração)",
+            email: "demo@contacerta.local",
+        };
+        db.user = user;
+        save(db);
+        setMockSession(true);
         return user;
     },
     async me() {
         await delay(120);
-        const db = load();
-        if (!localStorage.getItem(LS_AUTH)) return null;
-        return db.user;
+        if (!hasMockSession()) return null;
+        return load().user;
     },
     async logout() {
-        localStorage.removeItem(LS_AUTH);
+        setMockSession(false);
         return true;
     },
 

@@ -51,6 +51,18 @@ class AuthTest extends TestCase
             ->assertJsonValidationErrors(['email']);
     }
 
+    public function test_register_fails_without_password_confirmation(): void
+    {
+        $response = $this->postJson('/api/v1/auth/register', [
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'password123',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['password']);
+    }
+
     public function test_user_can_login_successfully(): void
     {
         User::factory()->create([
@@ -101,6 +113,13 @@ class AuthTest extends TestCase
     public function test_unauthenticated_user_cannot_access_me(): void
     {
         $response = $this->getJson('/api/v1/auth/me');
+
+        $response->assertStatus(401);
+    }
+
+    public function test_protected_teams_route_requires_authentication(): void
+    {
+        $response = $this->getJson('/api/v1/teams');
 
         $response->assertStatus(401);
     }

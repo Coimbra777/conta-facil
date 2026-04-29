@@ -5,18 +5,37 @@ import {
     useState,
     type ReactNode,
 } from "react";
-import { api } from "@/lib/api/client";
+import {
+    api,
+    isDemoMode,
+    setDemoMode,
+} from "@/lib/api/client";
+import { mockApi } from "@/lib/api/mockStore";
 import type { User } from "@/lib/types";
 
 interface AuthCtx {
     user: User | null;
     loading: boolean;
+    isDemo: boolean;
     login: (email: string, password: string) => Promise<void>;
-    register: (name: string, email: string, password: string) => Promise<void>;
+    register: (
+        name: string,
+        email: string,
+        password: string,
+        passwordConfirmation: string,
+    ) => Promise<void>;
+    loginDemo: () => Promise<void>;
     logout: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx | undefined>(undefined);
+
+async function leaveDemoMock(): Promise<void> {
+    if (isDemoMode()) {
+        await mockApi.logout();
+        setDemoMode(false);
+    }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
@@ -31,13 +50,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const value: AuthCtx = {
         user,
         loading,
+        isDemo: isDemoMode(),
         login: async (email, password) => {
+            await leaveDemoMock();
             setUser(await api.login(email, password));
         },
-        register: async (name, email, password) => {
-            setUser(await api.register(name, email, password));
+        register: async (
+            name,
+            email,
+            password,
+            passwordConfirmation,
+        ) => {
+            await leaveDemoMock();
+            setUser(
+                await api.register(name, email, password, passwordConfirmation),
+            );
+        },
+        loginDemo: async () => {
+            setUser(await api.enterDemo());
         },
         logout: async () => {
+            if (isDemoMode()) {
+                await mockApi.logout();
+                setDemoMode(false);
+                const u = await api.me();
+                setUser(u);
+                return;
+            }
             await api.logout();
             setUser(null);
         },

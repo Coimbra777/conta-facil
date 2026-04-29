@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { LogOut, Plus } from "lucide-react";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-    const { user, logout } = useAuth();
+    const { user, logout, isDemo } = useAuth();
     const nav = useNavigate();
 
     return (
@@ -16,6 +16,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     >
                         <span className="size-6 rounded-full bg-accent border-2 border-foreground" />
                         ContaCerta
+                        {isDemo && (
+                            <span className="text-[10px] sm:text-xs font-black uppercase px-2 py-0.5 rounded-md bg-arcade-yellow border-2 border-foreground whitespace-nowrap">
+                                Demo
+                            </span>
+                        )}
                     </Link>
 
                     <nav className="hidden sm:flex items-center gap-1">
@@ -52,6 +57,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </div>
                 </div>
             </header>
+
+            {isDemo && (
+                <div
+                    role="status"
+                    className="border-b-4 border-foreground bg-arcade-yellow px-4 py-3 text-center font-bold text-sm"
+                >
+                    Modo demonstração — os dados exibidos não são reais e não são gravados no servidor.
+                </div>
+            )}
 
             <main className="flex-1">{children}</main>
 

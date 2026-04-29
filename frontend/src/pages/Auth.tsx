@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ApiClientError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth";
 
 interface Props { mode: "login" | "register" }
 
 export default function AuthPage({ mode }: Props) {
-    const { login, register } = useAuth();
+    const { login, register, loginDemo } = useAuth();
     const nav = useNavigate();
     const [params] = useSearchParams();
     const redirect = params.get("redirect") ?? "/dashboard";
@@ -28,11 +29,27 @@ export default function AuthPage({ mode }: Props) {
         }
         setLoading(true);
         try {
-            if (isRegister) await register(name.trim(), email.trim(), password);
+            if (isRegister)
+                await register(
+                    name.trim(),
+                    email.trim(),
+                    password,
+                    confirm,
+                );
             else await login(email.trim(), password);
             nav(redirect);
-        } catch (e: any) {
-            setErr(e?.message ?? "Não foi possível continuar. Tente novamente.");
+        } catch (e: unknown) {
+            if (e instanceof ApiClientError && e.code === "NO_API_BASE") {
+                setErr(
+                    "Servidor da API não configurado. Defina VITE_API_BASE_URL no frontend e gere o build de novo.",
+                );
+            } else {
+                setErr(
+                    e instanceof Error
+                        ? e.message
+                        : "Não foi possível continuar. Tente novamente.",
+                );
+            }
         } finally {
             setLoading(false);
         }
@@ -108,11 +125,39 @@ export default function AuthPage({ mode }: Props) {
 
                         <button
                             disabled={loading}
+                            type="submit"
                             className="bg-accent text-accent-foreground border-4 border-foreground py-3 rounded-xl font-black uppercase tracking-wider brutal-press brutal-press-md disabled:opacity-50"
                         >
                             {loading ? "..." : isRegister ? "Criar conta" : "Entrar"}
                         </button>
                     </form>
+
+                    <div className="mt-6 pt-4 border-t-4 border-dashed border-muted-foreground/30">
+                        <button
+                            type="button"
+                            disabled={loading}
+                            title="Usa dados fictícios só neste navegador"
+                            onClick={async () => {
+                                setErr(null);
+                                setLoading(true);
+                                try {
+                                    await loginDemo();
+                                    nav(redirect);
+                                } catch (e: unknown) {
+                                    const msg =
+                                        e instanceof Error
+                                            ? e.message
+                                            : "Não foi possível iniciar o modo demo.";
+                                    setErr(msg);
+                                } finally {
+                                    setLoading(false);
+                                }
+                            }}
+                            className="w-full border-4 border-foreground bg-muted/80 py-3 rounded-xl font-bold uppercase tracking-wider brutal-press brutal-press-md disabled:opacity-50 text-sm"
+                        >
+                            Entrar em modo demonstração
+                        </button>
+                    </div>
 
                     <p className="text-sm text-muted-foreground mt-6 text-center">
                         {isRegister ? (

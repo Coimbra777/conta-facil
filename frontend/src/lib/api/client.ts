@@ -1,4 +1,4 @@
-// Cliente HTTP: mock sem VITE_API_BASE_URL; API real em /api/v1 (Bearer) quando configurado.
+// Cliente HTTP: modo demo explícito usa mock local; API real em /api/v1 (Bearer) quando configurado.
 
 import type {
     ApiStatus,
@@ -9,8 +9,41 @@ import type {
 } from "../types";
 import { mockApi } from "./mockStore";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
-const USE_MOCK = !BASE_URL?.trim();
+const BASE_URL_RAW = import.meta.env.VITE_API_BASE_URL as string | undefined;
+
+/** Modo demonstração explícito (UI); fluxos protegidos usam mock local sem Bearer falso. */
+const DEMO_MODE_KEY = "contacerta:demo:v1";
+
+export function hasRealApiConfigured(): boolean {
+    return Boolean(BASE_URL_RAW?.trim());
+}
+
+export function isDemoMode(): boolean {
+    try {
+        return localStorage.getItem(DEMO_MODE_KEY) === "1";
+    } catch {
+        return false;
+    }
+}
+
+export function setDemoMode(on: boolean): void {
+    try {
+        if (on) localStorage.setItem(DEMO_MODE_KEY, "1");
+        else localStorage.removeItem(DEMO_MODE_KEY);
+    } catch {
+        /* ignore */
+    }
+}
+
+/** Cobranças / sessão logada: mock só em modo demo explícito. */
+function useMockForProtected(): boolean {
+    return isDemoMode();
+}
+
+/** Links públicos (/p/…): mock em demo ou quando não há URL de API (deploy estático). */
+function useMockForPublic(): boolean {
+    return isDemoMode() || !hasRealApiConfigured();
+}
 
 const TOKEN_KEY = "contacerta:auth:v1";
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
@@ -38,9 +71,21 @@ export class ApiClientError extends Error {
     }
 }
 
+function getRealBaseUrl(): string {
+    const u = BASE_URL_RAW?.trim();
+    if (!u) {
+        throw new ApiClientError(
+            "Configure VITE_API_BASE_URL para usar login e API reais.",
+            { code: "NO_API_BASE" },
+        );
+    }
+    return u;
+}
+
 function authHeaders(json = false): HeadersInit {
     const h: Record<string, string> = {};
     if (json) h["Content-Type"] = "application/json";
+    if (isDemoMode()) return h;
     const t = getToken();
     if (t) h.Authorization = `Bearer ${t}`;
     return h;
@@ -202,15 +247,17 @@ async function authRegister(
     name: string,
     email: string,
     password: string,
+    password_confirmation: string,
 ): Promise<User> {
-    const res = await fetch(`${BASE_URL}/api/v1/auth/register`, {
+    const base = getRealBaseUrl();
+    const res = await fetch(`${base}/api/v1/auth/register`, {
         method: "POST",
         headers: authHeaders(true),
         body: JSON.stringify({
             name,
             email,
             password,
-            password_confirmation: password,
+            password_confirmation,
         }),
     });
     const json = (await readJson(res)) as Record<string, unknown>;
@@ -229,7 +276,8 @@ async function authRegister(
 }
 
 async function authLogin(email: string, password: string): Promise<User> {
-    const res = await fetch(`${BASE_URL}/api/v1/auth/login`, {
+    const base = getRealBaseUrl();
+    const res = await fetch(`${base}/api/v1/auth/login`, {
         method: "POST",
         headers: authHeaders(true),
         body: JSON.stringify({ email, password }),
@@ -248,8 +296,10 @@ async function authLogin(email: string, password: string): Promise<User> {
 }
 
 async function authMe(): Promise<User | null> {
+    if (!hasRealApiConfigured() || isDemoMode()) return null;
     if (!getToken()) return null;
-    const res = await fetch(`${BASE_URL}/api/v1/auth/me`, {
+    const base = getRealBaseUrl();
+    const res = await fetch(`${base}/api/v1/auth/me`, {
         headers: authHeaders(),
     });
     if (res.status === 401) {
@@ -269,8 +319,13 @@ async function authMe(): Promise<User | null> {
 async function authLogout(): Promise<void> {
     const t = getToken();
     if (!t) return;
+    if (!hasRealApiConfigured()) {
+        setToken(null);
+        return;
+    }
+    const base = getRealBaseUrl();
     try {
-        await fetch(`${BASE_URL}/api/v1/auth/logout`, {
+        await fetch(`${base}/api/v1/auth/logout`, {
             method: "POST",
             headers: authHeaders(),
         });
@@ -298,7 +353,8 @@ async function publicV1Fetch<T>(
     path: string,
     body?: unknown,
 ): Promise<T> {
-    const res = await fetch(`${BASE_URL}/api/v1${path}`, {
+    const base = getRealBaseUrl();
+    const res = await fetch(`${base}/api/v1${path}`, {
         method,
         headers:
             body !== undefined
@@ -322,7 +378,8 @@ async function v1Fetch<T>(
     path: string,
     body?: unknown,
 ): Promise<T> {
-    const res = await fetch(`${BASE_URL}/api/v1${path}`, {
+    const base = getRealBaseUrl();
+    const res = await fetch(`${base}/api/v1${path}`, {
         method,
         headers: authHeaders(body !== undefined),
         body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -343,7 +400,8 @@ async function v1Fetch<T>(
 }
 
 async function ensureTeamId(): Promise<string> {
-    const res = await fetch(`${BASE_URL}/api/v1/teams`, {
+    const base = getRealBaseUrl();
+    const res = await fetch(`${base}/api/v1/teams`, {
         headers: authHeaders(),
     });
     if (res.status === 401) onUnauthorized();
@@ -355,7 +413,7 @@ async function ensureTeamId(): Promise<string> {
         );
     const teams = json.teams as { id: string | number }[] | undefined;
     if (teams?.length) return String(teams[0].id);
-    const cr = await fetch(`${BASE_URL}/api/v1/teams`, {
+    const cr = await fetch(`${base}/api/v1/teams`, {
         method: "POST",
         headers: authHeaders(true),
         body: JSON.stringify({ name: "Minha equipe" }),
@@ -374,29 +432,42 @@ async function ensureTeamId(): Promise<string> {
 }
 
 export const api = {
-    register: (name: string, email: string, password: string): Promise<User> =>
-        USE_MOCK
-            ? mockApi.register(name, email, password).then((u) => {
-                  setToken("mock-token-" + u.id);
-                  return u;
-              })
-            : authRegister(name, email, password),
+    /** Modo apresentação: sem Bearer; dados só em mockStore. */
+    enterDemo: async (): Promise<User> => {
+        setDemoMode(true);
+        return mockApi.enterDemo();
+    },
+
+    register: (
+        name: string,
+        email: string,
+        password: string,
+        password_confirmation?: string,
+    ): Promise<User> =>
+        useMockForProtected()
+            ? mockApi.register(name, email, password)
+            : authRegister(
+                  name,
+                  email,
+                  password,
+                  password_confirmation ?? password,
+              ),
 
     login: (email: string, password: string): Promise<User> =>
-        USE_MOCK
-            ? mockApi.login(email, password).then((u) => {
-                  setToken("mock-token-" + u.id);
-                  return u;
-              })
+        useMockForProtected()
+            ? mockApi.login(email, password)
             : authLogin(email, password),
 
-    me: (): Promise<User | null> => (USE_MOCK ? mockApi.me() : authMe()),
+    me: (): Promise<User | null> =>
+        isDemoMode() ? mockApi.me() : authMe(),
 
     logout: (): Promise<boolean> =>
-        USE_MOCK ? mockApi.logout() : authLogout().then(() => true),
+        useMockForProtected()
+            ? mockApi.logout()
+            : authLogout().then(() => true),
 
     listExpenses: async (): Promise<Expense[]> => {
-        if (USE_MOCK) return mockApi.listExpenses();
+        if (useMockForProtected()) return mockApi.listExpenses();
         const teamId = await ensureTeamId();
         const data = await v1Fetch<{ expenses: Record<string, unknown>[] }>(
             "GET",
@@ -407,7 +478,7 @@ export const api = {
     },
 
     getExpense: async (id: string): Promise<Expense | null> => {
-        if (USE_MOCK) return mockApi.getExpense(id);
+        if (useMockForProtected()) return mockApi.getExpense(id);
         try {
             const data = await v1Fetch<{ expense: Record<string, unknown> }>(
                 "GET",
@@ -434,7 +505,7 @@ export const api = {
         pixReceiverName: string;
         participants: Array<{ name: string; phone: string; amount: number }>;
     }): Promise<Expense> => {
-        if (USE_MOCK) return mockApi.createExpense(input);
+        if (useMockForProtected()) return mockApi.createExpense(input);
         const teamId = await ensureTeamId();
         const due =
             input.dueDate?.slice(0, 10) ??
@@ -474,7 +545,8 @@ export const api = {
         _expenseId: string,
         chargeId: string,
     ): Promise<Participant | null> => {
-        if (USE_MOCK) return mockApi.validateParticipant(_expenseId, chargeId);
+        if (useMockForProtected())
+            return mockApi.validateParticipant(_expenseId, chargeId);
         const data = await v1Fetch<{ charge: Record<string, unknown> }>(
             "PATCH",
             `/charges/${chargeId}/validate`,
@@ -495,7 +567,7 @@ export const api = {
         chargeId: string,
         reason: string,
     ): Promise<Participant | null> => {
-        if (USE_MOCK)
+        if (useMockForProtected())
             return mockApi.rejectParticipant(_expenseId, chargeId, reason);
         const data = await v1Fetch<{ charge: Record<string, unknown> }>(
             "PATCH",
@@ -520,7 +592,8 @@ export const api = {
         hash: string,
         manageToken?: string | null,
     ): Promise<Expense | null> => {
-        if (USE_MOCK) return mockApi.getExpenseByHash(hash);
+        if (useMockForPublic()) return mockApi.getExpenseByHash(hash);
+        const base = getRealBaseUrl();
         const q =
             manageToken !== undefined &&
             manageToken !== null &&
@@ -528,7 +601,7 @@ export const api = {
                 ? `?manage=${encodeURIComponent(manageToken)}`
                 : "";
         const res = await fetch(
-            `${BASE_URL}/api/v1/public/expenses/${hash}${q}`,
+            `${base}/api/v1/public/expenses/${hash}${q}`,
         );
         const json = await readJson(res);
         if (res.status === 404) return null;
@@ -550,7 +623,8 @@ export const api = {
         phone: string,
         manageToken?: string | null,
     ) => {
-        if (USE_MOCK) return mockApi.identifyParticipant(hash, name, phone);
+        if (useMockForPublic())
+            return mockApi.identifyParticipant(hash, name, phone);
         try {
             const data = await publicV1Fetch<{
                 status: ApiStatus;
@@ -594,13 +668,15 @@ export const api = {
         participant: Participant,
         file: File,
     ): Promise<Participant | null> => {
-        if (USE_MOCK) return mockApi.submitProof(hash, participant, file);
+        if (useMockForPublic())
+            return mockApi.submitProof(hash, participant, file);
+        const base = getRealBaseUrl();
         const fd = new FormData();
         fd.append("name", participant.name);
         fd.append("phone", participant.phone);
         fd.append("proof", file);
         const res = await fetch(
-            `${BASE_URL}/api/v1/public/expenses/${hash}/submit-proof`,
+            `${base}/api/v1/public/expenses/${hash}/submit-proof`,
             {
                 method: "POST",
                 body: fd,
