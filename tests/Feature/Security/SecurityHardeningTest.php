@@ -69,7 +69,7 @@ class SecurityHardeningTest extends TestCase
             $this->postJson('/api/v1/auth/login', [
                 'email' => 'naoexiste@example.com',
                 'password' => 'qualquercoisa',
-            ])->assertStatus(401);
+            ])->assertStatus(422);
         }
 
         $this->postJson('/api/v1/auth/login', [

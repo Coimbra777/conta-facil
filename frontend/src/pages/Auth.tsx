@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ApiClientError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth";
+import { Eye, EyeOff } from "lucide-react";
 
 interface Props { mode: "login" | "register" }
 
@@ -16,8 +18,33 @@ export default function AuthPage({ mode }: Props) {
     const [confirm, setConfirm] = useState("");
     const [err, setErr] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [accountNotFoundHint, setAccountNotFoundHint] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const registerEmailSeeded = useRef(false);
 
     const isRegister = mode === "register";
+
+    useEffect(() => {
+        setAccountNotFoundHint(false);
+    }, [email, password]);
+
+    useEffect(() => {
+        setShowPassword(false);
+        setShowConfirmPassword(false);
+    }, [mode]);
+
+    useEffect(() => {
+        if (mode !== "register") {
+            registerEmailSeeded.current = false;
+            return;
+        }
+        const pre = params.get("email");
+        if (pre && !registerEmailSeeded.current) {
+            setEmail(pre);
+            registerEmailSeeded.current = true;
+        }
+    }, [mode, params]);
 
     const submit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -38,10 +65,15 @@ export default function AuthPage({ mode }: Props) {
             else await login(email.trim(), password);
             nav(redirect);
         } catch (e: unknown) {
+            const missingAccount =
+                e instanceof ApiClientError && e.code === "ACCOUNT_NOT_FOUND";
+            setAccountNotFoundHint(missingAccount);
             setErr(
-                e instanceof Error
-                    ? e.message
-                    : "Não foi possível continuar. Tente novamente.",
+                missingAccount
+                    ? null
+                    : e instanceof Error
+                      ? e.message
+                      : "Não foi possível continuar. Tente novamente.",
             );
         } finally {
             setLoading(false);
@@ -86,28 +118,92 @@ export default function AuthPage({ mode }: Props) {
                             />
                         </Field>
                         <Field label="Senha">
-                            <input
-                                required
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="brutal-input"
-                                placeholder="••••••••"
-                                minLength={6}
-                            />
+                            <div className="relative">
+                                <input
+                                    required
+                                    type={showPassword ? "text" : "password"}
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="brutal-input brutal-input-password"
+                                    placeholder="••••••••"
+                                    minLength={6}
+                                    autoComplete={isRegister ? "new-password" : "current-password"}
+                                />
+                                <button
+                                    type="button"
+                                    aria-label={
+                                        showPassword ? "Ocultar senha" : "Mostrar senha"
+                                    }
+                                    aria-pressed={showPassword}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 grid place-items-center size-10 rounded-lg border-2 border-foreground bg-background text-foreground brutal-press brutal-press-sm"
+                                    onClick={() => setShowPassword((v) => !v)}
+                                >
+                                    {showPassword ? (
+                                        <EyeOff className="size-5" aria-hidden />
+                                    ) : (
+                                        <Eye className="size-5" aria-hidden />
+                                    )}
+                                </button>
+                            </div>
                         </Field>
                         {isRegister && (
                             <Field label="Confirmar senha">
-                                <input
-                                    required
-                                    type="password"
-                                    value={confirm}
-                                    onChange={(e) => setConfirm(e.target.value)}
-                                    className="brutal-input"
-                                    placeholder="••••••••"
-                                    minLength={6}
-                                />
+                                <div className="relative">
+                                    <input
+                                        required
+                                        type={showConfirmPassword ? "text" : "password"}
+                                        value={confirm}
+                                        onChange={(e) => setConfirm(e.target.value)}
+                                        className="brutal-input brutal-input-password"
+                                        placeholder="••••••••"
+                                        minLength={6}
+                                        autoComplete="new-password"
+                                    />
+                                    <button
+                                        type="button"
+                                        aria-label={
+                                            showConfirmPassword
+                                                ? "Ocultar confirmação de senha"
+                                                : "Mostrar confirmação de senha"
+                                        }
+                                        aria-pressed={showConfirmPassword}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 grid place-items-center size-10 rounded-lg border-2 border-foreground bg-background text-foreground brutal-press brutal-press-sm"
+                                        onClick={() =>
+                                            setShowConfirmPassword((v) => !v)
+                                        }
+                                    >
+                                        {showConfirmPassword ? (
+                                            <EyeOff className="size-5" aria-hidden />
+                                        ) : (
+                                            <Eye className="size-5" aria-hidden />
+                                        )}
+                                    </button>
+                                </div>
                             </Field>
+                        )}
+
+                        {accountNotFoundHint && !isRegister && (
+                            <div className="border-4 border-foreground rounded-xl p-4 bg-arcade-cyan/35 flex flex-col gap-3">
+                                <p className="text-sm font-black uppercase tracking-wide">
+                                    Não encontramos uma conta com este e-mail.
+                                </p>
+                                <p className="text-sm text-muted-foreground leading-relaxed">
+                                    Crie sua conta gratuitamente para começar a organizar suas cobranças por Pix.
+                                </p>
+                                <button
+                                    type="button"
+                                    disabled={loading}
+                                    className="border-4 border-foreground bg-accent text-accent-foreground py-2.5 rounded-xl font-black uppercase tracking-wider brutal-press brutal-press-sm disabled:opacity-50 text-sm"
+                                    onClick={() => {
+                                        const q = new URLSearchParams();
+                                        q.set("email", email.trim());
+                                        q.set("redirect", redirect);
+                                        nav(`/cadastro?${q.toString()}`);
+                                    }}
+                                >
+                                    Criar conta agora
+                                </button>
+                            </div>
                         )}
 
                         {err && (
@@ -176,6 +272,7 @@ export default function AuthPage({ mode }: Props) {
                     outline: none;
                 }
                 .brutal-input:focus { box-shadow: 4px 4px 0 0 hsl(var(--accent)); }
+                .brutal-input-password { padding-right: 3.25rem; }
             `}</style>
         </div>
     );

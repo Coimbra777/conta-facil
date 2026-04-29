@@ -199,6 +199,16 @@ As verificações da tabela na seção “OWASP Top 10” permanecem válidas. P
 
 ---
 
+## Login — enumeração de e-mail (MVP / UX)
+
+O endpoint `POST /api/v1/auth/login` diferencia resposta quando **o e-mail não está cadastrado** (`422`, código `ACCOUNT_NOT_FOUND`) vs **senha incorreta** (`401`, código `INVALID_CREDENTIALS`). Isso permite orientar o usuário ao cadastro, mas **permite descobrir se um endereço já possui conta**.
+
+**Mitigações aceitas neste produto:** rate limit dedicado (`auth-login` em `routes/api.php`), não expor nome do usuário nem estado da conta; apenas a existência do e-mail.
+
+Para ambientes com requisito anti-enumeração, avaliar resposta única genérica e fluxo de “esqueci minha senha” / magic link.
+
+---
+
 ## Referência cruzada
 
 - Checklist operacional: [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md)

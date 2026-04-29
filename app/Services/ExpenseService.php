@@ -17,15 +17,17 @@ class ExpenseService
 {
     public function __construct(private NotificationService $notificationService) {}
 
+    /**
+     * Cria a despesa sem cobranças (charges). Os valores são definidos em addParticipantsToExpense,
+     * permitindo que a lista de participantes seja só quem divide o total — não todo o roster da equipe.
+     */
     public function createExpenseAndSplit(Team $team, User $creator, array $data): Expense
     {
-        $members = $team->members()->get();
-
-        if ($members->isEmpty()) {
+        if ($team->members()->doesntExist()) {
             throw new \DomainException('Team has no members.');
         }
 
-        $expense = DB::transaction(function () use ($team, $creator, $data, $members) {
+        return DB::transaction(function () use ($team, $creator, $data) {
             $expense = Expense::create([
                 'team_id' => $team->id,
                 'created_by' => $creator->id,
@@ -38,45 +40,8 @@ class ExpenseService
                 'status' => 'open',
             ]);
 
-            foreach ($members as $member) {
-                Charge::create([
-                    'team_member_id' => $member->id,
-                    'user_id' => $member->user_id,
-                    'expense_id' => $expense->id,
-                    'description' => $data['description'],
-                    'amount' => 0.0,
-                    'due_date' => $data['due_date'],
-                    'status' => 'pending',
-                ]);
-            }
-
-            $this->redistributeChargeAmounts($expense->fresh());
-
             return $expense->fresh()->load('charges.teamMember');
         });
-
-        foreach ($members as $member) {
-            $charge = $expense->charges()->where('team_member_id', $member->id)->first();
-            if (! $charge || ! $charge->teamMember) {
-                continue;
-            }
-
-            try {
-                $this->notificationService->sendChargeNotification(
-                    $member,
-                    $charge->fresh(),
-                    $expense->fresh()
-                );
-            } catch (\Throwable $e) {
-                Log::warning('Failed to notify charge', [
-                    'team_member_id' => $member->id,
-                    'charge_id' => $charge->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-        }
-
-        return $expense;
     }
 
     public function updateExpense(Expense $expense, array $data): Expense

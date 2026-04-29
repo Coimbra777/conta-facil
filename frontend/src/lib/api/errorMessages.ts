@@ -13,6 +13,8 @@ const BY_MESSAGE: Record<string, string> = {
 };
 
 const BY_CODE: Record<string, string> = {
+    ACCOUNT_NOT_FOUND:
+        "Não encontramos uma conta com este e-mail.",
     INVALID_CREDENTIALS: "E-mail ou senha inválidos.",
     TOO_MANY_REQUESTS:
         "Muitas tentativas. Tente novamente em instantes.",

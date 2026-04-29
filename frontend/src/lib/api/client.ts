@@ -319,12 +319,21 @@ async function authLogin(email: string, password: string): Promise<User> {
     });
     const json = (await readJson(res)) as Record<string, unknown>;
     if (!res.ok) {
+        const errs = json.errors as Record<string, string[]> | undefined;
+        if (
+            res.status === 422 &&
+            errs &&
+            typeof errs === "object" &&
+            Object.keys(errs).length > 0
+        ) {
+            throwLaravelValidation(json, res.status);
+        }
+        const code = typeof json.code === "string" ? json.code : undefined;
         throw apiErr(String(json.message ?? "Credenciais inválidas."), {
             status: res.status,
             code:
-                typeof json.code === "string"
-                    ? json.code
-                    : "INVALID_CREDENTIALS",
+                code ??
+                (res.status === 401 ? "INVALID_CREDENTIALS" : undefined),
         });
     }
     const user = json.user as Record<string, unknown>;

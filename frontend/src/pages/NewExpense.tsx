@@ -11,6 +11,12 @@ import {
     maskMoneyTyping,
     parseMoneyInput,
 } from "@/lib/inputMasks";
+import {
+    buildParticipantsPayloadForApi,
+    decimalToBrAmountInput,
+    splitTotalEquallyInReais,
+    validateExpenseParticipantsPayload,
+} from "@/lib/splitAmountEqually";
 import { Plus, Trash2, Wand2 } from "lucide-react";
 
 interface DraftParticipant {
@@ -76,18 +82,26 @@ export default function NewExpense() {
     }, [includeSelf, user?.id, user?.name, user?.phone]);
 
     const totalNum = parseMoneyInput(totalAmount);
-    const distributed = useMemo(
-        () => participants.reduce((s, p) => s + (parseFloat(p.amount.replace(",", ".")) || 0), 0),
-        [participants]
+    const totalCents = Math.round(totalNum * 100);
+    const distributedCents = useMemo(
+        () =>
+            participants.reduce(
+                (s, p) => s + Math.round(parseMoneyInput(p.amount) * 100),
+                0,
+            ),
+        [participants],
     );
-    const diff = totalNum - distributed;
+    const distributed = distributedCents / 100;
+    const diff = (totalCents - distributedCents) / 100;
 
     const splitEqually = () => {
         if (totalNum <= 0 || participants.length === 0) return;
-        const per = Math.floor((totalNum / participants.length) * 100) / 100;
-        const rest = Math.round((totalNum - per * participants.length) * 100) / 100;
+        const amounts = splitTotalEquallyInReais(totalNum, participants.length);
         setParticipants((arr) =>
-            arr.map((p, i) => ({ ...p, amount: ((i === 0 ? per + rest : per).toFixed(2)).replace(".", ",") }))
+            arr.map((p, i) => ({
+                ...p,
+                amount: decimalToBrAmountInput(amounts[i] ?? 0),
+            })),
         );
     };
 
@@ -102,18 +116,19 @@ export default function NewExpense() {
     const canStep2 = pixKey.trim().length > 0 && pixReceiverName.trim().length > 0;
     const canStep3 =
         participants.length > 0 &&
-        Math.abs(diff) <= 0.02 &&
-        participants.every((p) => {
-            const amt = parseFloat(p.amount.replace(",", ".")) || 0;
-            return (
-                p.name.trim().length > 0 &&
-                digitsOnly(p.phone).length >= 10 &&
-                amt > 0
-            );
-        });
+        Math.abs(totalCents - distributedCents) <= 2 &&
+        validateExpenseParticipantsPayload(participants, totalNum).ok;
 
     const submit = async () => {
-        if (!canStep1 || !canStep2 || !canStep3) return;
+        if (!canStep1 || !canStep2) return;
+        const validation = validateExpenseParticipantsPayload(
+            participants,
+            totalNum,
+        );
+        if (validation.ok === false) {
+            alert(validation.message);
+            return;
+        }
         setSubmitting(true);
         try {
             const exp = await api.createExpense({
@@ -124,11 +139,7 @@ export default function NewExpense() {
                 pixKeyType,
                 pixKey: pixKey.trim(),
                 pixReceiverName: pixReceiverName.trim(),
-                participants: participants.map((p) => ({
-                    name: p.name.trim(),
-                    phone: digitsOnly(p.phone),
-                    amount: parseFloat(p.amount.replace(",", ".")) || 0,
-                })),
+                participants: buildParticipantsPayloadForApi(participants),
             });
             nav(`/cobrancas/${exp.id}/sucesso`);
         } catch (e: unknown) {

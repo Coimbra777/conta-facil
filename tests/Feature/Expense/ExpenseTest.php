@@ -48,6 +48,40 @@ class ExpenseTest extends TestCase
         ], $overrides);
     }
 
+    /**
+     * @return list<array{name: string, phone: string, amount: float}>
+     */
+    private function participantRowsSplitAmongTeam(Team $team, float $total): array
+    {
+        $members = TeamMember::where('team_id', $team->id)->orderBy('id')->get();
+        $n = $members->count();
+        $this->assertGreaterThan(0, $n);
+        $totalCents = (int) round($total * 100);
+        $base = intdiv($totalCents, $n);
+        $remainder = $totalCents % $n;
+        $rows = [];
+        foreach ($members as $i => $m) {
+            $cents = $base + ($i < $remainder ? 1 : 0);
+            $rows[] = [
+                'name' => $m->name,
+                'phone' => (string) $m->phone,
+                'amount' => round($cents / 100, 2),
+            ];
+        }
+
+        return $rows;
+    }
+
+    private function postParticipantsSplitAmongTeam(Team $team, User $admin, int|string $expenseId, float $total): void
+    {
+        $participants = $this->participantRowsSplitAmongTeam($team, $total);
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/teams/{$team->id}/expenses/{$expenseId}/participants", [
+                'participants' => $participants,
+            ])
+            ->assertOk();
+    }
+
     public function test_expense_splits_correctly_among_members(): void
     {
         [$team, $admin] = $this->createTeamWithMembers(3);
@@ -77,10 +111,15 @@ class ExpenseTest extends TestCase
     {
         [$team, $admin] = $this->createTeamWithMembers(4);
 
-        $this->actingAs($admin, 'sanctum')
+        $response = $this->actingAs($admin, 'sanctum')
             ->postJson("/api/v1/teams/{$team->id}/expenses", $this->expensePayload([
                 'total_amount' => 200.00,
             ]));
+        $response->assertStatus(201);
+        $this->assertDatabaseCount('charges', 0);
+
+        $expenseId = $response->json('data.expense.id');
+        $this->postParticipantsSplitAmongTeam($team, $admin, $expenseId, 200.00);
 
         $this->assertDatabaseCount('charges', 4);
     }
@@ -89,10 +128,13 @@ class ExpenseTest extends TestCase
     {
         [$team, $admin] = $this->createTeamWithMembers(3);
 
-        $this->actingAs($admin, 'sanctum')
+        $create = $this->actingAs($admin, 'sanctum')
             ->postJson("/api/v1/teams/{$team->id}/expenses", $this->expensePayload([
                 'total_amount' => 10.00,
             ]));
+        $create->assertStatus(201);
+        $expenseId = $create->json('data.expense.id');
+        $this->postParticipantsSplitAmongTeam($team, $admin, $expenseId, 10.00);
 
         $charges = \App\Models\Charge::orderBy('id')->get();
         $this->assertCount(3, $charges);
@@ -134,20 +176,31 @@ class ExpenseTest extends TestCase
     {
         [$team, $admin] = $this->createTeamWithMembers(4);
 
-        $response = $this->actingAs($admin, 'sanctum')
+        $create = $this->actingAs($admin, 'sanctum')
             ->postJson("/api/v1/teams/{$team->id}/expenses", $this->expensePayload([
                 'total_amount' => 100.00,
             ]));
+        $create->assertStatus(201);
+        $this->assertEquals('0.00', $create->json('data.expense.amount_per_member'));
 
-        $this->assertEquals('25.00', $response->json('data.expense.amount_per_member'));
+        $expenseId = $create->json('data.expense.id');
+        $sync = $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/teams/{$team->id}/expenses/{$expenseId}/participants", [
+                'participants' => $this->participantRowsSplitAmongTeam($team, 100.00),
+            ]);
+        $sync->assertOk();
+        $this->assertEquals('25.00', $sync->json('data.expense.amount_per_member'));
     }
 
     public function test_charges_created_with_pending_status(): void
     {
         [$team, $admin] = $this->createTeamWithMembers(2);
 
-        $this->actingAs($admin, 'sanctum')
+        $create = $this->actingAs($admin, 'sanctum')
             ->postJson("/api/v1/teams/{$team->id}/expenses", $this->expensePayload());
+        $create->assertStatus(201);
+        $expenseId = $create->json('data.expense.id');
+        $this->postParticipantsSplitAmongTeam($team, $admin, $expenseId, 100.00);
 
         $this->assertDatabaseCount('charges', 2);
         $charges = \App\Models\Charge::all();
@@ -195,6 +248,7 @@ class ExpenseTest extends TestCase
             ]));
 
         $expenseId = $createResponse->json('data.expense.id');
+        $this->postParticipantsSplitAmongTeam($team, $admin, $expenseId, 50.00);
 
         $response = $this->actingAs($admin, 'sanctum')
             ->getJson("/api/v1/teams/{$team->id}/expenses/{$expenseId}");
@@ -236,8 +290,11 @@ class ExpenseTest extends TestCase
 
         $create = $this->actingAs($admin, 'sanctum')
             ->postJson("/api/v1/teams/{$team->id}/expenses", $this->expensePayload());
+        $create->assertStatus(201);
 
         $expenseId = $create->json('data.expense.id');
+        $this->postParticipantsSplitAmongTeam($team, $admin, $expenseId, 100.00);
+
         $newDue = now()->addDays(10)->format('Y-m-d');
 
         $patch = $this->actingAs($admin, 'sanctum')
@@ -329,10 +386,13 @@ class ExpenseTest extends TestCase
     {
         [$team, $admin] = $this->createTeamWithMembers(2);
 
-        $this->actingAs($admin, 'sanctum')
+        $create = $this->actingAs($admin, 'sanctum')
             ->postJson("/api/v1/teams/{$team->id}/expenses", $this->expensePayload([
                 'total_amount' => 40.00,
             ]));
+        $create->assertStatus(201);
+        $expenseId = $create->json('data.expense.id');
+        $this->postParticipantsSplitAmongTeam($team, $admin, $expenseId, 40.00);
 
         $response = $this->actingAs($admin, 'sanctum')
             ->getJson("/api/v1/teams/{$team->id}/expenses");

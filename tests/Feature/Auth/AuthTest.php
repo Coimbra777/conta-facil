@@ -82,6 +82,20 @@ class AuthTest extends TestCase
             ]);
     }
 
+    public function test_login_fails_with_unknown_email(): void
+    {
+        $response = $this->postJson('/api/v1/auth/login', [
+            'email' => 'not_registered@example.com',
+            'password' => 'password123',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJson([
+                'message' => 'Não encontramos uma conta com este e-mail.',
+                'code' => 'ACCOUNT_NOT_FOUND',
+            ]);
+    }
+
     public function test_login_fails_with_wrong_password(): void
     {
         User::factory()->create([
