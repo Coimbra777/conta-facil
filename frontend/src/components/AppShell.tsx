@@ -45,7 +45,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             <button
                                 onClick={async () => {
                                     await logout();
-                                    nav("/");
+                                    nav("/", { replace: true });
                                 }}
                                 title="Sair"
                                 className="border-4 border-foreground bg-card p-2 rounded-lg brutal-press brutal-press-sm"

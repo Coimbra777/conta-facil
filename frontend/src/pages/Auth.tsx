@@ -1,23 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ApiClientError } from "@/lib/api/client";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { ApiClientError, getSafeRedirect } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth";
 import { Eye, EyeOff } from "lucide-react";
 
 interface Props { mode: "login" | "register" }
 
 export default function AuthPage({ mode }: Props) {
-    const { login, register, loginDemo, user } = useAuth();
+    const { login, register, loginDemo, user, loading: authLoading } = useAuth();
     const nav = useNavigate();
     const [params] = useSearchParams();
-    const redirect = params.get("redirect") ?? "/dashboard";
+    const redirect = getSafeRedirect(params.get("redirect"));
 
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirm, setConfirm] = useState("");
     const [err, setErr] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
     const [accountNotFoundHint, setAccountNotFoundHint] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -46,6 +46,20 @@ export default function AuthPage({ mode }: Props) {
         }
     }, [mode, params]);
 
+    if (authLoading) {
+        return (
+            <div className="min-h-dvh grid place-items-center bg-background">
+                <div className="border-4 border-foreground bg-card rounded-2xl px-6 py-4 font-bold brutal-shadow-sm">
+                    Carregando…
+                </div>
+            </div>
+        );
+    }
+
+    if (user) {
+        return <Navigate to={redirect} replace />;
+    }
+
     const submit = async (e: React.FormEvent) => {
         e.preventDefault();
         setErr(null);
@@ -53,17 +67,17 @@ export default function AuthPage({ mode }: Props) {
             setErr("As senhas não conferem.");
             return;
         }
-        setLoading(true);
+        setSubmitting(true);
         try {
             if (isRegister)
-                await register(
-                    name.trim(),
-                    email.trim(),
+                await register({
+                    name: name.trim(),
+                    email: email.trim(),
                     password,
-                    confirm,
-                );
-            else await login(email.trim(), password);
-            nav(redirect);
+                    passwordConfirmation: confirm,
+                });
+            else await login({ email: email.trim(), password });
+            nav(redirect, { replace: true });
         } catch (e: unknown) {
             const missingAccount =
                 e instanceof ApiClientError && e.code === "ACCOUNT_NOT_FOUND";
@@ -76,7 +90,7 @@ export default function AuthPage({ mode }: Props) {
                       : "Não foi possível continuar. Tente novamente.",
             );
         } finally {
-            setLoading(false);
+            setSubmitting(false);
         }
     };
 
@@ -192,7 +206,7 @@ export default function AuthPage({ mode }: Props) {
                                 </p>
                                 <button
                                     type="button"
-                                    disabled={loading}
+                                    disabled={submitting}
                                     className="border-4 border-foreground bg-accent text-accent-foreground py-2.5 rounded-xl font-black uppercase tracking-wider brutal-press brutal-press-sm disabled:opacity-50 text-sm"
                                     onClick={() => {
                                         const q = new URLSearchParams();
@@ -213,11 +227,11 @@ export default function AuthPage({ mode }: Props) {
                         )}
 
                         <button
-                            disabled={loading}
+                            disabled={submitting}
                             type="submit"
                             className="bg-accent text-accent-foreground border-4 border-foreground py-3 rounded-xl font-black uppercase tracking-wider brutal-press brutal-press-md disabled:opacity-50"
                         >
-                            {loading ? "..." : isRegister ? "Criar conta" : "Entrar"}
+                            {submitting ? "..." : isRegister ? "Criar conta" : "Entrar"}
                         </button>
                     </form>
 
@@ -225,14 +239,14 @@ export default function AuthPage({ mode }: Props) {
                     <div className="mt-6 pt-4 border-t-4 border-dashed border-muted-foreground/30">
                         <button
                             type="button"
-                            disabled={loading}
+                            disabled={submitting}
                             title="Usa dados fictícios só neste navegador"
                             onClick={async () => {
                                 setErr(null);
-                                setLoading(true);
+                                setSubmitting(true);
                                 try {
                                     await loginDemo();
-                                    nav(redirect);
+                                    nav(redirect, { replace: true });
                                 } catch (e: unknown) {
                                     const msg =
                                         e instanceof Error
@@ -240,7 +254,7 @@ export default function AuthPage({ mode }: Props) {
                                             : "Não foi possível iniciar o modo demo.";
                                     setErr(msg);
                                 } finally {
-                                    setLoading(false);
+                                    setSubmitting(false);
                                 }
                             }}
                             className="w-full border-4 border-foreground bg-muted/80 py-3 rounded-xl font-bold uppercase tracking-wider brutal-press brutal-press-md disabled:opacity-50 text-sm"
@@ -252,9 +266,9 @@ export default function AuthPage({ mode }: Props) {
 
                     <p className="text-sm text-muted-foreground mt-6 text-center">
                         {isRegister ? (
-                            <>Já tem conta? <Link to="/login" className="font-bold text-foreground underline">Entrar</Link></>
+                            <>Já tem conta? <Link to={`/login?redirect=${encodeURIComponent(redirect)}`} className="font-bold text-foreground underline">Entrar</Link></>
                         ) : (
-                            <>Novo por aqui? <Link to="/cadastro" className="font-bold text-foreground underline">Criar conta</Link></>
+                            <>Novo por aqui? <Link to={`/cadastro?redirect=${encodeURIComponent(redirect)}`} className="font-bold text-foreground underline">Criar conta</Link></>
                         )}
                     </p>
 

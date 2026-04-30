@@ -1,7 +1,11 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, CheckCircle2, ClipboardList, MessageSquareText, PiggyBank, Plane, Users2, PartyPopper, Trophy, Home } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 export default function Landing() {
+    const { user, loading, logout } = useAuth();
+    const isLoggedIn = Boolean(user);
+
     return (
         <div className="min-h-dvh bg-background text-foreground">
             {/* NAV */}
@@ -11,13 +15,30 @@ export default function Landing() {
                     ContaCerta
                 </Link>
                 <div className="flex items-center gap-3">
-                    <Link to="/login" className="font-bold hidden sm:inline">Entrar</Link>
-                    <Link
-                        to="/cadastro"
-                        className="bg-foreground text-background border-4 border-foreground px-4 py-2 rounded-lg font-bold brutal-press brutal-press-sm"
-                    >
-                        Criar conta
-                    </Link>
+                    {loading ? (
+                        <span className="text-sm font-bold text-muted-foreground">Carregando...</span>
+                    ) : isLoggedIn ? (
+                        <>
+                            <Link to="/dashboard" className="font-bold hidden sm:inline">Minhas cobranças</Link>
+                            <button
+                                type="button"
+                                onClick={() => void logout()}
+                                className="bg-foreground text-background border-4 border-foreground px-4 py-2 rounded-lg font-bold brutal-press brutal-press-sm"
+                            >
+                                Sair
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <Link to="/login" className="font-bold hidden sm:inline">Entrar</Link>
+                            <Link
+                                to="/cadastro"
+                                className="bg-foreground text-background border-4 border-foreground px-4 py-2 rounded-lg font-bold brutal-press brutal-press-sm"
+                            >
+                                Criar conta
+                            </Link>
+                        </>
+                    )}
                 </div>
             </nav>
 
@@ -34,23 +55,50 @@ export default function Landing() {
                     </h1>
 
                     <p className="text-lg sm:text-xl font-medium max-w-[46ch] leading-snug text-muted-foreground mb-10">
-                        Cadastre-se, crie uma cobrança compartilhada, envie o link para os participantes e
-                        acompanhe quem já pagou. Sem planilhas. Sem cobrança no WhatsApp.
+                        {isLoggedIn
+                            ? "Você está logado. Continue gerenciando suas cobranças."
+                            : "Cadastre-se, crie uma cobrança compartilhada, envie o link para os participantes e acompanhe quem já pagou. Sem planilhas. Sem cobrança no WhatsApp."}
                     </p>
 
                     <div className="flex flex-wrap gap-4 w-full sm:w-auto">
-                        <Link
-                            to="/cadastro"
-                            className="bg-accent text-accent-foreground font-black uppercase tracking-wider text-base sm:text-lg px-6 sm:px-8 py-4 border-4 border-foreground rounded-xl brutal-press brutal-press-md text-center w-full sm:w-auto inline-flex items-center justify-center gap-2"
-                        >
-                            Criar conta grátis <ArrowRight className="size-5" />
-                        </Link>
-                        <Link
-                            to="/login?redirect=/cobrancas/nova"
-                            className="bg-card text-foreground font-bold text-base sm:text-lg px-6 sm:px-8 py-4 border-4 border-foreground rounded-xl brutal-press brutal-press-md text-center w-full sm:w-auto"
-                        >
-                            Entrar e criar cobrança
-                        </Link>
+                        {isLoggedIn ? (
+                            <>
+                                <Link
+                                    to="/dashboard"
+                                    className="bg-accent text-accent-foreground font-black uppercase tracking-wider text-base sm:text-lg px-6 sm:px-8 py-4 border-4 border-foreground rounded-xl brutal-press brutal-press-md text-center w-full sm:w-auto inline-flex items-center justify-center gap-2"
+                                >
+                                    Ir para minhas cobranças <ArrowRight className="size-5" />
+                                </Link>
+                                <Link
+                                    to="/cobrancas/nova"
+                                    className="bg-card text-foreground font-bold text-base sm:text-lg px-6 sm:px-8 py-4 border-4 border-foreground rounded-xl brutal-press brutal-press-md text-center w-full sm:w-auto"
+                                >
+                                    Criar nova cobrança
+                                </Link>
+                                <button
+                                    type="button"
+                                    onClick={() => void logout()}
+                                    className="bg-card text-foreground font-bold text-base sm:text-lg px-6 sm:px-8 py-4 border-4 border-foreground rounded-xl brutal-press brutal-press-md text-center w-full sm:w-auto"
+                                >
+                                    Sair
+                                </button>
+                            </>
+                        ) : (
+                            <>
+                                <Link
+                                    to="/cadastro"
+                                    className="bg-accent text-accent-foreground font-black uppercase tracking-wider text-base sm:text-lg px-6 sm:px-8 py-4 border-4 border-foreground rounded-xl brutal-press brutal-press-md text-center w-full sm:w-auto inline-flex items-center justify-center gap-2"
+                                >
+                                    Criar conta grátis <ArrowRight className="size-5" />
+                                </Link>
+                                <Link
+                                    to="/login?redirect=/cobrancas/nova"
+                                    className="bg-card text-foreground font-bold text-base sm:text-lg px-6 sm:px-8 py-4 border-4 border-foreground rounded-xl brutal-press brutal-press-md text-center w-full sm:w-auto"
+                                >
+                                    Entrar
+                                </Link>
+                            </>
+                        )}
                         <Link
                             to="/demo"
                             className="bg-card text-foreground font-bold text-base sm:text-lg px-6 sm:px-8 py-4 border-4 border-foreground rounded-xl brutal-press brutal-press-md text-center w-full sm:w-auto"
@@ -156,21 +204,42 @@ export default function Landing() {
                     Bora rachar do jeito certo?
                 </h2>
                 <p className="text-lg text-muted-foreground mb-10">
-                    Cadastre-se para criar cobranças, gerenciar participantes e validar comprovantes no painel.
+                    {isLoggedIn
+                        ? "Seu painel está pronto para continuar acompanhando pagamentos e criar novas cobranças."
+                        : "Cadastre-se para criar cobranças, gerenciar participantes e validar comprovantes no painel."}
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                    <Link
-                        to="/cadastro"
-                        className="inline-flex items-center justify-center gap-2 bg-accent text-accent-foreground font-black uppercase text-lg px-10 py-5 border-4 border-foreground rounded-xl brutal-press brutal-press-lg w-full sm:w-auto"
-                    >
-                        Criar conta <ArrowRight className="size-5" />
-                    </Link>
-                    <Link
-                        to="/login?redirect=/cobrancas/nova"
-                        className="inline-flex items-center justify-center gap-2 bg-card text-foreground font-bold text-lg px-10 py-5 border-4 border-foreground rounded-xl brutal-press brutal-press-lg w-full sm:w-auto"
-                    >
-                        Já tenho conta
-                    </Link>
+                    {isLoggedIn ? (
+                        <>
+                            <Link
+                                to="/dashboard"
+                                className="inline-flex items-center justify-center gap-2 bg-accent text-accent-foreground font-black uppercase text-lg px-10 py-5 border-4 border-foreground rounded-xl brutal-press brutal-press-lg w-full sm:w-auto"
+                            >
+                                Ir para minhas cobranças <ArrowRight className="size-5" />
+                            </Link>
+                            <Link
+                                to="/cobrancas/nova"
+                                className="inline-flex items-center justify-center gap-2 bg-card text-foreground font-bold text-lg px-10 py-5 border-4 border-foreground rounded-xl brutal-press brutal-press-lg w-full sm:w-auto"
+                            >
+                                Criar nova cobrança
+                            </Link>
+                        </>
+                    ) : (
+                        <>
+                            <Link
+                                to="/cadastro"
+                                className="inline-flex items-center justify-center gap-2 bg-accent text-accent-foreground font-black uppercase text-lg px-10 py-5 border-4 border-foreground rounded-xl brutal-press brutal-press-lg w-full sm:w-auto"
+                            >
+                                Criar conta <ArrowRight className="size-5" />
+                            </Link>
+                            <Link
+                                to="/login?redirect=/cobrancas/nova"
+                                className="inline-flex items-center justify-center gap-2 bg-card text-foreground font-bold text-lg px-10 py-5 border-4 border-foreground rounded-xl brutal-press brutal-press-lg w-full sm:w-auto"
+                            >
+                                Entrar
+                            </Link>
+                        </>
+                    )}
                 </div>
             </section>
         </div>

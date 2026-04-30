@@ -35,7 +35,7 @@ describe("AuthPage login UX", () => {
             ),
         );
         renderLogin();
-        fireEvent.change(screen.getByLabelText(/e-mail/i), {
+        fireEvent.change(await screen.findByLabelText(/e-mail/i), {
             target: { value: "ghost@test.com" },
         });
         fireEvent.change(screen.getByLabelText(/^senha$/i), {
@@ -61,7 +61,7 @@ describe("AuthPage login UX", () => {
             ),
         );
         renderLogin();
-        fireEvent.change(screen.getByLabelText(/e-mail/i), {
+        fireEvent.change(await screen.findByLabelText(/e-mail/i), {
             target: { value: "novo@test.com" },
         });
         fireEvent.change(screen.getByLabelText(/^senha$/i), {
@@ -90,7 +90,7 @@ describe("AuthPage login UX", () => {
             }),
         );
         renderLogin();
-        fireEvent.change(screen.getByLabelText(/e-mail/i), {
+        fireEvent.change(await screen.findByLabelText(/e-mail/i), {
             target: { value: "john@test.com" },
         });
         fireEvent.change(screen.getByLabelText(/^senha$/i), {

@@ -1,4 +1,5 @@
 import { Navigate, useLocation } from "react-router-dom";
+import { getSafeRedirect } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -14,6 +15,14 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
             </div>
         );
     }
-    if (!user) return <Navigate to={`/login?redirect=${encodeURIComponent(loc.pathname)}`} replace />;
+    if (!user) {
+        const redirect = getSafeRedirect(`${loc.pathname}${loc.search}`);
+        return (
+            <Navigate
+                to={`/login?redirect=${encodeURIComponent(redirect)}`}
+                replace
+            />
+        );
+    }
     return <>{children}</>;
 }

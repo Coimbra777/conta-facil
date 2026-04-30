@@ -3,8 +3,10 @@
 import type {
     ApiStatus,
     Expense,
+    LoginPayload,
     Participant,
     PixKeyType,
+    RegisterPayload,
     User,
 } from "../types";
 import { mapApiErrorToUserMessage } from "./errorMessages";
@@ -59,11 +61,41 @@ function usePublicMock(hash: string): boolean {
 }
 
 const TOKEN_KEY = "contacerta:auth:v1";
-export const getToken = () => localStorage.getItem(TOKEN_KEY);
-export const setToken = (t: string | null) => {
-    if (t) localStorage.setItem(TOKEN_KEY, t);
-    else localStorage.removeItem(TOKEN_KEY);
-};
+export const AUTH_SESSION_CLEARED_EVENT = "contacerta:auth-session-cleared";
+
+export function getToken(): string | null {
+    try {
+        return localStorage.getItem(TOKEN_KEY);
+    } catch {
+        return null;
+    }
+}
+
+export function setToken(t: string | null): void {
+    try {
+        if (t) localStorage.setItem(TOKEN_KEY, t);
+        else localStorage.removeItem(TOKEN_KEY);
+    } catch {
+        /* ignore */
+    }
+}
+
+export function clearAuthStorage(): void {
+    setToken(null);
+    if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event(AUTH_SESSION_CLEARED_EVENT));
+    }
+}
+
+export function getSafeRedirect(
+    value: string | null,
+    fallback = "/dashboard",
+): string {
+    if (!value || !value.startsWith("/") || value.startsWith("//")) {
+        return fallback;
+    }
+    return value;
+}
 
 export class ApiClientError extends Error {
     code?: string;
@@ -321,20 +353,17 @@ function unwrapEnvelope<T>(json: unknown, res: Response): T {
 }
 
 async function authRegister(
-    name: string,
-    email: string,
-    password: string,
-    password_confirmation: string,
-): Promise<User> {
+    payload: RegisterPayload,
+): Promise<{ token: string; user: User }> {
     const base = getRealBaseUrl();
     const res = await fetch(`${base}/api/v1/auth/register`, {
         method: "POST",
         headers: authHeaders(true),
         body: JSON.stringify({
-            name,
-            email,
-            password,
-            password_confirmation,
+            name: payload.name,
+            email: payload.email,
+            password: payload.password,
+            password_confirmation: payload.passwordConfirmation,
         }),
     });
     const json = (await readJson(res)) as Record<string, unknown>;
@@ -347,16 +376,17 @@ async function authRegister(
     }
     const user = json.user as Record<string, unknown>;
     const token = json.token as string;
-    setToken(token);
-    return normalizeUser(user);
+    return { token, user: normalizeUser(user) };
 }
 
-async function authLogin(email: string, password: string): Promise<User> {
+async function authLogin(
+    payload: LoginPayload,
+): Promise<{ token: string; user: User }> {
     const base = getRealBaseUrl();
     const res = await fetch(`${base}/api/v1/auth/login`, {
         method: "POST",
         headers: authHeaders(true),
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(payload),
     });
     const json = (await readJson(res)) as Record<string, unknown>;
     if (!res.ok) {
@@ -379,8 +409,7 @@ async function authLogin(email: string, password: string): Promise<User> {
     }
     const user = json.user as Record<string, unknown>;
     const token = json.token as string;
-    setToken(token);
-    return normalizeUser(user);
+    return { token, user: normalizeUser(user) };
 }
 
 async function authMe(): Promise<User | null> {
@@ -391,7 +420,7 @@ async function authMe(): Promise<User | null> {
         headers: authHeaders(),
     });
     if (res.status === 401) {
-        setToken(null);
+        clearAuthStorage();
         return null;
     }
     const json = (await readJson(res)) as Record<string, unknown>;
@@ -414,14 +443,13 @@ async function authLogout(): Promise<void> {
             headers: authHeaders(),
         });
     } finally {
-        setToken(null);
+        clearAuthStorage();
     }
 }
 
-function onUnauthorized(): never {
-    setToken(null);
-    window.location.href = "/login";
-    throw new ApiClientError("Sessão expirada. Faça login novamente.", {
+function onUnauthorized(): ApiClientError {
+    clearAuthStorage();
+    return new ApiClientError("Sessão expirada. Faça login novamente.", {
         status: 401,
         code: "UNAUTHENTICATED",
     });
@@ -466,7 +494,7 @@ async function v1Fetch<T>(
         headers: authHeaders(body !== undefined),
         body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-    if (res.status === 401) onUnauthorized();
+    if (res.status === 401) throw onUnauthorized();
     if (res.status === 403) {
         const json = (await readJson(res)) as Record<string, unknown>;
         throw new ApiClientError(String(json.message ?? "Acesso negado."), {
@@ -486,7 +514,7 @@ async function v1FetchBlob(path: string): Promise<Blob> {
     const res = await fetch(`${base}/api/v1${path}`, {
         headers: authHeaders(false),
     });
-    if (res.status === 401) onUnauthorized();
+    if (res.status === 401) throw onUnauthorized();
     if (!res.ok) {
         let msg = `Erro ${res.status}`;
         try {
@@ -515,24 +543,22 @@ export const api = {
     },
 
     register: (
-        name: string,
-        email: string,
-        password: string,
-        password_confirmation?: string,
-    ): Promise<User> =>
+        payload: RegisterPayload,
+    ): Promise<{ token: string | null; user: User }> =>
         useMockForProtected()
-            ? mockApi.register(name, email, password)
-            : authRegister(
-                  name,
-                  email,
-                  password,
-                  password_confirmation ?? password,
-              ),
+            ? mockApi
+                  .register(payload.name, payload.email, payload.password)
+                  .then((user) => ({ token: null, user }))
+            : authRegister(payload),
 
-    login: (email: string, password: string): Promise<User> =>
+    login: (
+        payload: LoginPayload,
+    ): Promise<{ token: string | null; user: User }> =>
         useMockForProtected()
-            ? mockApi.login(email, password)
-            : authLogin(email, password),
+            ? mockApi
+                  .login(payload.email, payload.password)
+                  .then((user) => ({ token: null, user }))
+            : authLogin(payload),
 
     me: (): Promise<User | null> => (isDemoMode() ? mockApi.me() : authMe()),
 
