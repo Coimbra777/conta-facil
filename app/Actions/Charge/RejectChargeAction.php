@@ -47,17 +47,9 @@ class RejectChargeAction
     private function assertCanReject(Charge $charge, string $audience): void
     {
         if ($charge->status === 'validated') {
-            if ($audience === ChargeActionAudience::PUBLIC_MANAGE) {
-                throw new HttpApiException(
-                    'Nao e possivel rejeitar um pagamento ja validado.',
-                    'CHARGE_ALREADY_PAID',
-                    422,
-                );
-            }
-
             throw new HttpApiException(
-                'Charge must have proof_sent status.',
-                'INVALID_CHARGE_STATE',
+                'Pagamento já confirmado.',
+                'PARTICIPANT_ALREADY_VALIDATED',
                 422,
             );
         }
@@ -65,10 +57,10 @@ class RejectChargeAction
         if ($charge->status !== 'proof_sent') {
             $message = match ($audience) {
                 ChargeActionAudience::PUBLIC_MANAGE => match ($charge->status) {
-                    'rejected' => 'Este comprovante ja foi rejeitado.',
-                    default => 'So e possivel rejeitar quando houver comprovante aguardando aprovacao.',
+                    'rejected' => 'Este comprovante já foi rejeitado.',
+                    default => 'Só é possível rejeitar quando houver comprovante aguardando aprovação.',
                 },
-                default => 'Charge must have proof_sent status.',
+                default => 'Só é possível rejeitar quando houver comprovante aguardando aprovação.',
             };
 
             throw new HttpApiException(

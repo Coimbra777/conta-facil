@@ -57,9 +57,15 @@ describe("Dashboard", () => {
     });
 
     it("hides share actions when expense is closed", async () => {
-        vi.spyOn(api, "listExpenses").mockResolvedValue([
-            expenseRow({ status: "closed" }),
-        ]);
+        vi.spyOn(api, "listExpenses").mockResolvedValue({
+            expenses: [expenseRow({ status: "closed" })],
+            pagination: {
+                currentPage: 1,
+                lastPage: 1,
+                perPage: 15,
+                total: 1,
+            },
+        });
         renderDashboard();
         await waitFor(() =>
             expect(

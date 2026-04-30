@@ -5,6 +5,7 @@ namespace App\Http\Requests\Api\V1;
 use App\Exceptions\HttpApiException;
 use App\Models\Expense;
 use App\Support\ExpenseAuthorizer;
+use App\Support\ParticipantPhoneUniqueness;
 use App\Support\PhoneNormalizer;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -84,8 +85,8 @@ class AddExpenseParticipantsRequest extends FormRequest
                 }
                 if (isset($seenInPayload[$phone])) {
                     throw new HttpApiException(
-                        'Já existe um participante com este telefone nesta despesa.',
-                        'DUPLICATE_PARTICIPANT',
+                        ParticipantPhoneUniqueness::MESSAGE,
+                        ParticipantPhoneUniqueness::CODE,
                         422,
                     );
                 }
@@ -95,8 +96,8 @@ class AddExpenseParticipantsRequest extends FormRequest
                     $q->where('phone_normalized', $phone);
                 })->exists()) {
                     throw new HttpApiException(
-                        'Já existe um participante com este telefone nesta despesa.',
-                        'DUPLICATE_PARTICIPANT',
+                        ParticipantPhoneUniqueness::MESSAGE,
+                        ParticipantPhoneUniqueness::CODE,
                         422,
                     );
                 }

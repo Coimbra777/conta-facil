@@ -42,17 +42,9 @@ class ValidateChargeAction
     private function assertCanValidate(Charge $charge, string $audience): void
     {
         if ($charge->status === 'validated') {
-            if ($audience === ChargeActionAudience::PUBLIC_MANAGE) {
-                throw new HttpApiException(
-                    'Este pagamento ja foi validado.',
-                    'CHARGE_ALREADY_PAID',
-                    422,
-                );
-            }
-
             throw new HttpApiException(
-                'Charge must have proof_sent status.',
-                'INVALID_CHARGE_STATE',
+                'Pagamento já confirmado.',
+                'PARTICIPANT_ALREADY_VALIDATED',
                 422,
             );
         }
@@ -60,10 +52,10 @@ class ValidateChargeAction
         if ($charge->status !== 'proof_sent') {
             $message = match ($audience) {
                 ChargeActionAudience::PUBLIC_MANAGE => match ($charge->status) {
-                    'rejected' => 'Comprovante rejeitado. O participante precisa enviar um novo comprovante pelo link da despesa antes da validacao.',
-                    default => 'So e possivel validar apos o participante enviar o comprovante e marcar como pago (status aguardando aprovacao).',
+                    'rejected' => 'Comprovante rejeitado. O participante precisa enviar um novo comprovante pelo link da despesa antes da validação.',
+                    default => 'Só é possível validar após o participante enviar um comprovante para aprovação.',
                 },
-                default => 'Charge must have proof_sent status.',
+                default => 'Só é possível validar quando houver comprovante aguardando aprovação.',
             };
 
             throw new HttpApiException(

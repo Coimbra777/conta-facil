@@ -10,6 +10,15 @@ Sistema para criar cobranças compartilhadas via Pix, adicionar participantes e 
 - Docker Compose
 - Sanctum (Bearer Token)
 
+## Hardening Fase 1
+
+- `UserResource` não expõe CPF bruto nem `email_verified_at` no contrato padrão de auth.
+- Tokens Sanctum expiram por padrão em `43200` minutos (30 dias) via `SANCTUM_TOKEN_EXPIRATION_MINUTES`.
+- Comprovantes usam storage privado e o backend remove arquivo + registro ao excluir despesa/participante ou substituir proof reenviado.
+- `GET /api/v1/expenses` agora é paginado (`per_page` padrão `15`, máximo `50`).
+- O banco agora exige telefone único por despesa em `expense_participants`.
+- A SPA servida pelo Laravel envia CSP mínima e headers de segurança adicionais.
+
 ## Arquitetura
 
 Backend API + SPA React.
@@ -59,6 +68,12 @@ php artisan migrate
 php artisan serve
 ```
 
+Variáveis adicionais relevantes para produção:
+
+```bash
+SANCTUM_TOKEN_EXPIRATION_MINUTES=43200
+```
+
 Frontend:
 
 ```bash
@@ -83,6 +98,8 @@ Backend:
 ```bash
 docker compose exec app php artisan test
 ```
+
+Se o PHP local não tiver as extensões do PHPUnit (`dom`, `mbstring`, `xml`, `xmlwriter`), rode os testes backend no container/CI.
 
 Frontend:
 

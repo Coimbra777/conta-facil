@@ -17,7 +17,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         RateLimiter::for('auth-login', function (Request $request) {
-            return Limit::perMinute(5)->by($request->ip());
+            return Limit::perMinute(5)->by($request->ip().'|'.strtolower((string) $request->input('email')));
         });
 
         RateLimiter::for('auth-register', function (Request $request) {
@@ -28,16 +28,22 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by($request->ip());
         });
 
+        RateLimiter::for('public-expense-show', function (Request $request) {
+            $hash = (string) $request->route('hash', '');
+
+            return Limit::perMinute(60)->by($request->ip().'|'.$hash);
+        });
+
         RateLimiter::for('public-validate-participant', function (Request $request) {
             $hash = (string) $request->route('hash', '');
 
-            return Limit::perMinute(30)->by($request->ip().'|'.$hash);
+            return Limit::perMinute(20)->by($request->ip().'|'.$hash);
         });
 
         RateLimiter::for('public-submit-proof', function (Request $request) {
             $hash = (string) $request->route('hash', '');
 
-            return Limit::perMinute(15)->by($request->ip().'|'.$hash);
+            return Limit::perMinute(10)->by($request->ip().'|'.$hash);
         });
 
         RateLimiter::for('public-sensitive-mutation', function (Request $request) {
@@ -49,7 +55,19 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('public-charge-action', function (Request $request) {
             $charge = (string) $request->route('charge', '');
 
-            return Limit::perMinute(60)->by($request->ip().'|'.$charge);
+            return Limit::perMinute(30)->by($request->ip().'|'.$charge);
+        });
+
+        RateLimiter::for('public-proof-download', function (Request $request) {
+            $charge = (string) $request->route('charge', '');
+
+            return Limit::perMinute(20)->by($request->ip().'|download|'.$charge);
+        });
+
+        RateLimiter::for('public-proof-preview', function (Request $request) {
+            $charge = (string) $request->route('charge', '');
+
+            return Limit::perMinute(20)->by($request->ip().'|preview|'.$charge);
         });
     }
 }

@@ -9,13 +9,18 @@ use App\Models\ExpenseParticipant;
 use App\Models\User;
 use App\Support\ChargeStatusTransition;
 use App\Support\ExpenseClosedPolicy;
+use App\Support\ParticipantPhoneUniqueness;
 use App\Support\PhoneNormalizer;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ExpenseService
 {
-    public function __construct(private NotificationService $notificationService) {}
+    public function __construct(
+        private NotificationService $notificationService,
+        private PaymentProofService $paymentProofService,
+    ) {}
 
     /**
      * Cria cobrança sem participantes (charges). Valores por participante em addParticipantsToExpense.
@@ -93,47 +98,53 @@ class ExpenseService
 
         $this->assertNewParticipantPhonesAllowed($expense, $participants);
 
-        $result = DB::transaction(function () use ($expense, $participants) {
-            $newChargeIds = [];
+        try {
+            $result = DB::transaction(function () use ($expense, $participants) {
+                $newChargeIds = [];
 
-            foreach ($participants as $p) {
-                $phone = PhoneNormalizer::digits($p['phone'] ?? '');
-                $name = trim((string) ($p['name'] ?? ''));
-                if ($phone === '' || strlen($phone) < 10 || $name === '') {
-                    throw new \DomainException(
-                        'Informe nome e telefone válidos para cada participante novo.'
-                    );
+                foreach ($participants as $p) {
+                    $phone = PhoneNormalizer::digits($p['phone'] ?? '');
+                    $name = trim((string) ($p['name'] ?? ''));
+                    if ($phone === '' || strlen($phone) < 10 || $name === '') {
+                        throw new \DomainException(
+                            'Informe nome e telefone válidos para cada participante novo.'
+                        );
+                    }
+
+                    $participant = ExpenseParticipant::create([
+                        'expense_id' => $expense->id,
+                        'name' => $name,
+                        'phone' => $phone,
+                        'phone_normalized' => $phone,
+                        'email' => null,
+                        'amount' => 0,
+                        'metadata' => null,
+                    ]);
+
+                    $charge = Charge::create([
+                        'expense_participant_id' => $participant->id,
+                        'expense_id' => $expense->id,
+                        'description' => $expense->description,
+                        'amount' => 0.0,
+                        'due_date' => $expense->due_date,
+                        'status' => 'pending',
+                    ]);
+                    $newChargeIds[] = $charge->id;
                 }
 
-                $participant = ExpenseParticipant::create([
-                    'expense_id' => $expense->id,
-                    'name' => $name,
-                    'phone' => $phone,
-                    'phone_normalized' => $phone,
-                    'email' => null,
-                    'amount' => 0,
-                    'metadata' => null,
-                ]);
+                $fresh = $expense->fresh()->load(Charge::eagerChargesWithParticipant());
+                $this->applyIncrementalParticipantAmounts($fresh, $participants);
 
-                $charge = Charge::create([
-                    'expense_participant_id' => $participant->id,
-                    'expense_id' => $expense->id,
-                    'description' => $expense->description,
-                    'amount' => 0.0,
-                    'due_date' => $expense->due_date,
-                    'status' => 'pending',
-                ]);
-                $newChargeIds[] = $charge->id;
-            }
+                return [
+                    'expense' => $fresh->load(Charge::eagerChargesWithParticipant()),
+                    'newChargeIds' => $newChargeIds,
+                ];
+            });
+        } catch (QueryException $e) {
+            $this->throwDuplicateParticipantPhoneIfNeeded($e);
 
-            $fresh = $expense->fresh()->load(Charge::eagerChargesWithParticipant());
-            $this->applyIncrementalParticipantAmounts($fresh, $participants);
-
-            return [
-                'expense' => $fresh->load(Charge::eagerChargesWithParticipant()),
-                'newChargeIds' => $newChargeIds,
-            ];
-        });
+            throw $e;
+        }
 
         foreach ($result['newChargeIds'] as $chargeId) {
             $charge = Charge::query()
@@ -254,8 +265,8 @@ class ExpenseService
         }
 
         DB::transaction(function () use ($expense) {
-            foreach ($expense->charges as $charge) {
-                $charge->paymentProofs()->delete();
+            foreach ($expense->charges()->get() as $charge) {
+                $this->paymentProofService->deleteProofsForCharge($charge);
                 $charge->delete();
             }
             $expense->delete();
@@ -313,59 +324,65 @@ class ExpenseService
             ->where('expense_participant_id', $participant->id)
             ->firstOrFail();
 
-        return DB::transaction(function () use ($participant, $charge, $expense, $data) {
-            $name = array_key_exists('name', $data)
-                ? trim((string) $data['name'])
-                : $participant->name;
-            $phoneDigits = array_key_exists('phone', $data)
-                ? PhoneNormalizer::digits((string) $data['phone'])
-                : (string) $participant->phone_normalized;
+        try {
+            return DB::transaction(function () use ($participant, $charge, $expense, $data) {
+                $name = array_key_exists('name', $data)
+                    ? trim((string) $data['name'])
+                    : $participant->name;
+                $phoneDigits = array_key_exists('phone', $data)
+                    ? PhoneNormalizer::digits((string) $data['phone'])
+                    : (string) $participant->phone_normalized;
 
-            if ($name === '' || strlen($phoneDigits) < 10) {
-                throw new \DomainException('Informe nome e telefone válidos.');
-            }
-
-            if ($phoneDigits !== (string) $participant->phone_normalized) {
-                $dup = $expense->charges()->whereHas('expenseParticipant', function ($q) use ($participant, $phoneDigits): void {
-                    $q->where('phone_normalized', $phoneDigits)
-                        ->where('id', '!=', $participant->id);
-                })->exists();
-                if ($dup) {
-                    throw new \DomainException('Já existe participante com este telefone nesta cobrança.');
+                if ($name === '' || strlen($phoneDigits) < 10) {
+                    throw new \DomainException('Informe nome e telefone válidos.');
                 }
-            }
 
-            $participant->update([
-                'name' => $name,
-                'phone' => $phoneDigits,
-                'phone_normalized' => $phoneDigits,
-            ]);
-
-            if (array_key_exists('amount', $data) && $data['amount'] !== null) {
-                $newAmt = round((float) $data['amount'], 2);
-                if ($newAmt <= 0) {
-                    throw new \DomainException('O valor do participante deve ser maior que zero.');
+                if ($phoneDigits !== (string) $participant->phone_normalized) {
+                    $dup = $expense->charges()->whereHas('expenseParticipant', function ($q) use ($participant, $phoneDigits): void {
+                        $q->where('phone_normalized', $phoneDigits)
+                            ->where('id', '!=', $participant->id);
+                    })->exists();
+                    if ($dup) {
+                        throw ParticipantPhoneUniqueness::makeException();
+                    }
                 }
-                $charge->update([
-                    'amount' => $newAmt,
-                    'description' => $expense->description,
-                    'due_date' => $expense->due_date,
+
+                $participant->update([
+                    'name' => $name,
+                    'phone' => $phoneDigits,
+                    'phone_normalized' => $phoneDigits,
                 ]);
-                $participant->update(['amount' => $newAmt]);
 
-                $sum = round((float) $expense->charges()->sum('amount'), 2);
-                $total = round((float) $expense->total_amount, 2);
-                if (abs($sum - $total) > 0.02) {
-                    throw new \DomainException('A soma dos valores dos participantes deve ser igual ao valor total da cobrança.');
+                if (array_key_exists('amount', $data) && $data['amount'] !== null) {
+                    $newAmt = round((float) $data['amount'], 2);
+                    if ($newAmt <= 0) {
+                        throw new \DomainException('O valor do participante deve ser maior que zero.');
+                    }
+                    $charge->update([
+                        'amount' => $newAmt,
+                        'description' => $expense->description,
+                        'due_date' => $expense->due_date,
+                    ]);
+                    $participant->update(['amount' => $newAmt]);
+
+                    $sum = round((float) $expense->charges()->sum('amount'), 2);
+                    $total = round((float) $expense->total_amount, 2);
+                    if (abs($sum - $total) > 0.02) {
+                        throw new \DomainException('A soma dos valores dos participantes deve ser igual ao valor total da cobrança.');
+                    }
+
+                    $count = $expense->charges()->count();
+                    $avg = $count > 0 ? round($total / $count, 2) : 0;
+                    $expense->update(['amount_per_participant' => $avg]);
                 }
 
-                $count = $expense->charges()->count();
-                $avg = $count > 0 ? round($total / $count, 2) : 0;
-                $expense->update(['amount_per_participant' => $avg]);
-            }
+                return $expense->fresh()->load(Charge::eagerChargesWithParticipant());
+            });
+        } catch (QueryException $e) {
+            $this->throwDuplicateParticipantPhoneIfNeeded($e);
 
-            return $expense->fresh()->load(Charge::eagerChargesWithParticipant());
-        });
+            throw $e;
+        }
     }
 
     public function deleteExpenseParticipant(ExpenseParticipant $participant): Expense
@@ -385,7 +402,7 @@ class ExpenseService
             ->firstOrFail();
 
         DB::transaction(function () use ($participant, $charge) {
-            $charge->paymentProofs()->delete();
+            $this->paymentProofService->deleteProofsForCharge($charge);
             $charge->delete();
             $participant->delete();
         });
@@ -414,8 +431,8 @@ class ExpenseService
 
             if (isset($seenInPayload[$phone])) {
                 throw new HttpApiException(
-                    'Já existe um participante com este telefone nesta despesa.',
-                    'DUPLICATE_PARTICIPANT',
+                    ParticipantPhoneUniqueness::MESSAGE,
+                    ParticipantPhoneUniqueness::CODE,
                     422,
                 );
             }
@@ -425,11 +442,18 @@ class ExpenseService
                 $q->where('phone_normalized', $phone);
             })->exists()) {
                 throw new HttpApiException(
-                    'Já existe um participante com este telefone nesta despesa.',
-                    'DUPLICATE_PARTICIPANT',
+                    ParticipantPhoneUniqueness::MESSAGE,
+                    ParticipantPhoneUniqueness::CODE,
                     422,
                 );
             }
+        }
+    }
+
+    private function throwDuplicateParticipantPhoneIfNeeded(QueryException $e): void
+    {
+        if (ParticipantPhoneUniqueness::matchesQueryException($e)) {
+            throw ParticipantPhoneUniqueness::makeException();
         }
     }
 }

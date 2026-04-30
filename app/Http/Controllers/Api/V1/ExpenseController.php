@@ -17,24 +17,34 @@ use App\Http\Responses\ApiResponse;
 use App\Models\Expense;
 use App\Models\Charge;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class ExpenseController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
+        $perPage = max(1, min($request->integer('per_page', 15), 50));
 
         $expenses = Expense::query()
             ->where('created_by', $user->id)
             ->with(Charge::eagerChargesWithParticipantAndProofs())
             ->latest()
-            ->get();
+            ->paginate($perPage)
+            ->withQueryString();
 
         return ApiResponse::success([
-            'expenses' => ExpenseResource::collection($expenses)->resolve(),
-        ], 'Despesas carregadas com sucesso.');
+            'expenses' => ExpenseResource::collection($expenses->getCollection())->resolve(),
+        ], 'Despesas carregadas com sucesso.', meta: [
+            'pagination' => [
+                'current_page' => $expenses->currentPage(),
+                'last_page' => $expenses->lastPage(),
+                'per_page' => $expenses->perPage(),
+                'total' => $expenses->total(),
+            ],
+        ]);
     }
 
     public function store(StoreExpenseRequest $request, CreateExpenseAction $createExpenseAction): JsonResponse

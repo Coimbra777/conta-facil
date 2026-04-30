@@ -4,9 +4,11 @@ namespace Tests\Feature\Expense;
 
 use App\Models\Expense;
 use App\Models\ExpenseParticipant;
+use App\Models\PaymentProof;
 use App\Models\User;
 use App\Support\ExpenseClosedPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ExpenseTest extends TestCase
@@ -330,7 +332,7 @@ class ExpenseTest extends TestCase
 
         $dup->assertStatus(422)
             ->assertJsonPath('message', 'Já existe um participante com este telefone nesta despesa.')
-            ->assertJsonPath('code', 'DUPLICATE_PARTICIPANT');
+            ->assertJsonPath('code', 'DUPLICATED_PARTICIPANT_PHONE');
 
         $this->assertDatabaseCount('charges', 0);
     }
@@ -365,7 +367,7 @@ class ExpenseTest extends TestCase
 
         $again->assertStatus(422)
             ->assertJsonPath('message', 'Já existe um participante com este telefone nesta despesa.')
-            ->assertJsonPath('code', 'DUPLICATE_PARTICIPANT');
+            ->assertJsonPath('code', 'DUPLICATED_PARTICIPANT_PHONE');
 
         $this->assertDatabaseCount('charges', 2);
     }
@@ -480,6 +482,62 @@ class ExpenseTest extends TestCase
 
         $response->assertOk()->assertJsonPath('success', true);
         $this->assertCount(0, $response->json('data.expenses') ?? []);
+    }
+
+    public function test_expenses_index_is_paginated(): void
+    {
+        $admin = $this->createAdminUser();
+
+        Expense::factory()->count(18)->create([
+            'created_by' => $admin->id,
+            'status' => 'open',
+        ]);
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/expenses?per_page=15');
+
+        $response->assertOk()
+            ->assertJsonCount(15, 'data.expenses')
+            ->assertJsonPath('meta.pagination.current_page', 1)
+            ->assertJsonPath('meta.pagination.last_page', 2)
+            ->assertJsonPath('meta.pagination.per_page', 15)
+            ->assertJsonPath('meta.pagination.total', 18);
+    }
+
+    public function test_delete_expense_removes_payment_proof_file(): void
+    {
+        Storage::fake('local');
+
+        $admin = $this->createAdminUser();
+        $expense = Expense::factory()->create([
+            'created_by' => $admin->id,
+            'status' => 'open',
+        ]);
+        $participant = ExpenseParticipant::factory()->create([
+            'expense_id' => $expense->id,
+            'phone_normalized' => '11999999999',
+        ]);
+        $charge = \App\Models\Charge::factory()->create([
+            'expense_id' => $expense->id,
+            'expense_participant_id' => $participant->id,
+            'status' => 'pending',
+        ]);
+        $path = "payment-proofs/{$charge->id}/proof.jpg";
+        Storage::disk('local')->put($path, 'jpeg-bytes');
+
+        PaymentProof::factory()->create([
+            'charge_id' => $charge->id,
+            'file_path' => $path,
+            'original_filename' => 'proof.jpg',
+            'mime_type' => 'image/jpeg',
+        ]);
+
+        $this->actingAs($admin, 'sanctum')
+            ->deleteJson("/api/v1/expenses/{$expense->id}")
+            ->assertOk();
+
+        Storage::disk('local')->assertMissing($path);
+        $this->assertDatabaseMissing('payment_proofs', ['charge_id' => $charge->id]);
     }
 
     public function test_user_cannot_show_other_users_expense(): void

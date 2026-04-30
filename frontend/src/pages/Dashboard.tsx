@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { CopyButton } from "@/components/CopyButton";
 import { api } from "@/lib/api/client";
 import { CLOSED_EXPENSE_SHARE_DISABLED_HINT } from "@/lib/closedExpenseCopy";
-import type { ApiStatus, Expense } from "@/lib/types";
+import type { ApiStatus, Expense, PaginationMeta } from "@/lib/types";
 import {
     buildOrganizerExpenseShareMessage,
     buildPublicLink,
@@ -119,22 +119,36 @@ function DashboardSkeleton() {
 
 export default function Dashboard() {
     const [expenses, setExpenses] = useState<Expense[]>([]);
+    const [pagination, setPagination] = useState<PaginationMeta>({
+        currentPage: 1,
+        lastPage: 1,
+        perPage: 15,
+        total: 0,
+    });
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [page, setPage] = useState(1);
 
     const load = useCallback(async () => {
         setLoading(true);
         setLoadError(null);
         try {
-            const list = await api.listExpenses();
-            setExpenses(list);
+            const result = await api.listExpenses({ page, perPage: 15 });
+            setExpenses(result.expenses);
+            setPagination(result.pagination);
         } catch {
             setLoadError("Erro ao carregar suas cobranças.");
             setExpenses([]);
+            setPagination({
+                currentPage: 1,
+                lastPage: 1,
+                perPage: 15,
+                total: 0,
+            });
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [page]);
 
     useEffect(() => {
         load();
@@ -407,6 +421,50 @@ export default function Dashboard() {
                                 })}
                             </ul>
                         )}
+
+                        {pagination.lastPage > 1 ? (
+                            <div className="mt-8 flex items-center justify-between gap-3 flex-wrap">
+                                <p className="text-sm text-muted-foreground">
+                                    Página {pagination.currentPage} de{" "}
+                                    {pagination.lastPage} • {pagination.total}{" "}
+                                    cobranças
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            page <= 1 || loading
+                                        }
+                                        onClick={() =>
+                                            setPage((current) =>
+                                                Math.max(1, current - 1),
+                                            )
+                                        }
+                                        className="border-4 border-foreground bg-card px-4 py-2 rounded-xl font-bold disabled:opacity-50"
+                                    >
+                                        Anterior
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={
+                                            page >= pagination.lastPage ||
+                                            loading
+                                        }
+                                        onClick={() =>
+                                            setPage((current) =>
+                                                Math.min(
+                                                    pagination.lastPage,
+                                                    current + 1,
+                                                ),
+                                            )
+                                        }
+                                        className="border-4 border-foreground bg-card px-4 py-2 rounded-xl font-bold disabled:opacity-50"
+                                    >
+                                        Próxima
+                                    </button>
+                                </div>
+                            </div>
+                        ) : null}
                     </>
                 )}
             </div>

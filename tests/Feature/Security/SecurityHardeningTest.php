@@ -52,10 +52,8 @@ class SecurityHardeningTest extends TestCase
 
         $this->patchJson('/api/v1/public/expenses/sec-hash-1/close?manage='.urlencode('token-invalido'))
             ->assertForbidden()
-            ->assertJsonPath(
-                'message',
-                'Você não tem permissão para realizar esta ação.',
-            );
+            ->assertJsonPath('message', 'Token de gestão inválido.')
+            ->assertJsonPath('code', 'INVALID_MANAGE_TOKEN');
     }
 
     public function test_login_is_rate_limited(): void
@@ -141,5 +139,9 @@ class SecurityHardeningTest extends TestCase
         $response->assertOk();
         $response->assertHeader('X-Content-Type-Options', 'nosniff');
         $response->assertHeader('X-Frame-Options', 'DENY');
+        $response->assertHeader(
+            'Content-Security-Policy',
+            "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; form-action 'self'",
+        );
     }
 }

@@ -13,12 +13,9 @@ use App\Http\Responses\ApiResponse;
 use App\Models\Charge;
 use App\Support\ChargeProofHttpResponse;
 use App\Support\ExpenseAuthorizer;
-use App\Support\SafeDownloadFilename;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ChargeValidationController extends Controller
 {
@@ -48,18 +45,11 @@ class ChargeValidationController extends Controller
         ], 'Comprovante rejeitado.');
     }
 
-    public function downloadProof(Charge $charge): StreamedResponse|JsonResponse
+    public function downloadProof(Charge $charge): BinaryFileResponse|JsonResponse
     {
         $this->authorizeExpenseOwner($charge);
 
-        $proof = $charge->latestProof();
-        if (! $proof) {
-            return ApiResponse::error('No proof found.', 'NOT_FOUND', 404);
-        }
-
-        $downloadName = SafeDownloadFilename::forProof((string) $proof->mime_type, $proof->original_filename);
-
-        return Storage::disk('local')->download($proof->file_path, $downloadName);
+        return ChargeProofHttpResponse::latest($charge, false);
     }
 
     public function viewLatestProof(Charge $charge): BinaryFileResponse|JsonResponse

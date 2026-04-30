@@ -8,6 +8,6 @@ class ChargeAlreadyPaidException extends HttpApiException
 {
     public static function make(string $message = 'Pagamento já confirmado.', array $payload = []): self
     {
-        return new self($message, 'CHARGE_ALREADY_PAID', 422, $payload);
+        return new self($message, 'PARTICIPANT_ALREADY_VALIDATED', 422, $payload);
     }
 }

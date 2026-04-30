@@ -30,7 +30,7 @@ Erro típico:
 }
 ```
 
-**Auth** (`register`, `login`, `me`, `logout`): corpo **sem** esse envelope — ver `AuthController`.
+`register`, `login`, `me` e `logout` usam **o mesmo envelope** acima.
 
 ---
 
@@ -49,10 +49,17 @@ POST /api/v1/auth/logout
 
 ```json
 {
-  "user": { "id": 1, "name": "…", "email": "…" },
-  "token": "1|…"
+  "success": true,
+  "message": "Login realizado com sucesso.",
+  "data": {
+    "user": { "id": 1, "name": "…", "email": "…", "phone": "…" },
+    "token": "1|…"
+  },
+  "meta": {}
 }
 ```
+
+`UserResource` não expõe `cpf` bruto nem `email_verified_at`.
 
 ---
 
@@ -71,6 +78,35 @@ PATCH  /api/v1/expenses/{id}/participants/{participantId}
 DELETE /api/v1/expenses/{id}/participants/{participantId}
 ```
 
+### Paginação do índice
+
+`GET /api/v1/expenses` usa paginação.
+
+- `per_page` opcional; default **15**
+- `per_page` máximo **50**
+- resposta em `data.expenses`
+- metadados em `meta.pagination`
+
+Exemplo:
+
+```json
+{
+  "success": true,
+  "message": "Despesas carregadas com sucesso.",
+  "data": {
+    "expenses": []
+  },
+  "meta": {
+    "pagination": {
+      "current_page": 1,
+      "last_page": 3,
+      "per_page": 15,
+      "total": 41
+    }
+  }
+}
+```
+
 ### Status `open` e `closed`
 
 - **`open`** — cobrança ativa: mutações permitidas conforme regras existentes (participantes, Pix, validação/rejeição, comprovantes).
@@ -80,7 +116,7 @@ Tentativa de alteração com despesa **`closed`** → **422** com código **`EXP
 
 ### `POST .../participants` — adicionar apenas participantes novos
 
-Cada telefone no corpo deve ser **novo** nesta despesa. Duplicata no payload ou telefone já cadastrado → **422** `DUPLICATE_PARTICIPANT` com a mensagem *Já existe um participante com este telefone nesta despesa.*
+Cada telefone no corpo deve ser **novo** nesta despesa. Duplicata no payload ou telefone já cadastrado → **422** `DUPLICATED_PARTICIPANT_PHONE` com a mensagem *Já existe um participante com este telefone nesta despesa.*
 
 **Soma dos valores:** `sum(amount das cobranças já existentes) + sum(amount deste POST) == total_amount` da despesa. Na primeira chamada (sem cobranças), basta o payload fechar o total.
 
@@ -151,7 +187,7 @@ Quando reativado historicamente, o corpo seria validado por `StorePublicExpenseR
 {
   "success": false,
   "message": "Já existe um participante com este telefone nesta despesa.",
-  "code": "DUPLICATE_PARTICIPANT",
+  "code": "DUPLICATED_PARTICIPANT_PHONE",
   "errors": {}
 }
 ```
@@ -190,13 +226,32 @@ GET   /api/v1/public/charges/{id}/proofs/latest/view
 
 **submit-proof** — `multipart/form-data`: `name`, `phone`, `proof` (arquivo).
 
+Se a cobrança estiver `rejected`, um novo envio substitui o comprovante anterior. O backend mantém apenas o arquivo mais recente por `charge`.
+
 **reject** (gestão pública ou painel): corpo com **`reason` obrigatório**.
 
 ---
 
 ## Rate limiting
 
-Throttle global na API + limitadores nomeados (login, registro, criação pública, submit-proof, mutações com manage, etc.).
+Throttle global na API + limitadores nomeados:
+
+- `auth-login`: 5/min por IP + e-mail
+- `auth-register`: 3/min por IP
+- `public-expense-show`: 60/min por IP + hash
+- `public-validate-participant`: 20/min por IP + hash
+- `public-submit-proof`: 10/min por IP + hash
+- `public-proof-download`: 20/min por IP + charge
+- `public-proof-preview`: 20/min por IP + charge
+
+Erros estáveis relevantes:
+
+- `EXPENSE_CLOSED`
+- `INVALID_MANAGE_TOKEN`
+- `DUPLICATED_PARTICIPANT_PHONE`
+- `PROOF_ALREADY_SENT`
+- `PARTICIPANT_ALREADY_VALIDATED`
+- `PROOF_NOT_FOUND`
 
 ---
 

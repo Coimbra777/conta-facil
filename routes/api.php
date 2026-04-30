@@ -26,7 +26,8 @@ Route::prefix('v1')->group(function () {
     });
 
     Route::prefix('public')->group(function () {
-        Route::get('/expenses/{hash}', [PublicExpenseController::class, 'show']);
+        Route::get('/expenses/{hash}', [PublicExpenseController::class, 'show'])
+            ->middleware('throttle:public-expense-show');
         Route::patch('/expenses/{hash}/close', [PublicExpenseController::class, 'closeExpense'])
             ->middleware('throttle:public-sensitive-mutation');
         Route::patch('/expenses/{hash}', [PublicExpenseController::class, 'updateExpense'])
@@ -42,9 +43,9 @@ Route::prefix('v1')->group(function () {
         Route::patch('/charges/{charge}/reject', [PublicExpenseController::class, 'rejectCharge'])
             ->middleware('throttle:public-charge-action');
         Route::get('/charges/{charge}/proof', [PublicExpenseController::class, 'downloadProof'])
-            ->middleware('throttle:public-charge-action');
+            ->middleware('throttle:public-proof-download');
         Route::get('/charges/{charge}/proofs/latest/view', [PublicExpenseController::class, 'viewLatestProof'])
-            ->middleware('throttle:public-charge-action');
+            ->middleware('throttle:public-proof-preview');
     });
 
     Route::middleware('auth:sanctum')->group(function () {

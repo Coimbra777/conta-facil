@@ -30,8 +30,8 @@ trait AuthorizesPublicExpense
         $token = ManageTokenResolver::resolve($request);
         if (! $token || ! hash_equals((string) $expense->manage_token, (string) $token)) {
             throw new HttpApiException(
-                'Você não tem permissão para realizar esta ação.',
-                'FORBIDDEN',
+                'Token de gestão inválido.',
+                'INVALID_MANAGE_TOKEN',
                 403,
             );
         }
@@ -48,4 +48,3 @@ trait AuthorizesPublicExpense
     }
 
 }
-

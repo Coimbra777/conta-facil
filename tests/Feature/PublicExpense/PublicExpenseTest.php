@@ -5,6 +5,7 @@ namespace Tests\Feature\PublicExpense;
 use App\Models\Charge;
 use App\Models\Expense;
 use App\Models\ExpenseParticipant;
+use App\Models\PaymentProof;
 use App\Models\User;
 use App\Support\ExpenseClosedPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -413,8 +414,38 @@ class PublicExpenseTest extends TestCase
         $response->assertStatus(422)
             ->assertJsonPath('success', false)
             ->assertJsonPath('message', 'Pagamento já confirmado.')
-            ->assertJsonPath('code', 'CHARGE_ALREADY_PAID')
+            ->assertJsonPath('code', 'PARTICIPANT_ALREADY_VALIDATED')
             ->assertJsonPath('errors.status', 'validated');
+    }
+
+    public function test_resubmitting_proof_after_rejection_removes_old_file(): void
+    {
+        Storage::fake('local');
+        [, , $charge2] = $this->createExpenseWithCharges();
+
+        $this->post('/api/v1/public/expenses/test-hash-123/submit-proof', [
+            'name' => 'Maria Silva',
+            'phone' => '11000000002',
+            'proof' => ProofUploadFixture::jpegUploadedFile('primeiro.jpg'),
+        ])->assertStatus(201);
+
+        $firstProof = PaymentProof::query()->where('charge_id', $charge2->id)->latest()->firstOrFail();
+        $firstPath = $firstProof->file_path;
+
+        $this->patchJson("/api/v1/public/charges/{$charge2->id}/reject", [
+            'manage_token' => 'manage-token-secret',
+            'reason' => 'Arquivo ilegível.',
+        ])->assertOk();
+
+        $this->post('/api/v1/public/expenses/test-hash-123/submit-proof', [
+            'name' => 'Maria Silva',
+            'phone' => '11000000002',
+            'proof' => ProofUploadFixture::jpegUploadedFile('segundo.jpg'),
+        ])->assertStatus(201);
+
+        Storage::disk('local')->assertMissing($firstPath);
+        $this->assertDatabaseCount('payment_proofs', 1);
+        $this->assertNotSame($firstPath, PaymentProof::query()->firstOrFail()->file_path);
     }
 
     public function test_submit_proof_does_not_match_wrong_exact_name(): void
@@ -549,10 +580,8 @@ class PublicExpenseTest extends TestCase
 
         $this->patchJson('/api/v1/public/expenses/test-hash-123/close')
             ->assertForbidden()
-            ->assertJsonPath(
-                'message',
-                'Você não tem permissão para realizar esta ação.',
-            );
+            ->assertJsonPath('message', 'Token de gestão inválido.')
+            ->assertJsonPath('code', 'INVALID_MANAGE_TOKEN');
     }
 
     public function test_close_expense_rejects_when_any_charge_not_validated(): void

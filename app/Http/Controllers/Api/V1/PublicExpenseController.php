@@ -27,13 +27,10 @@ use App\Services\PublicExpenseCreatorService;
 use App\Support\ChargeProofHttpResponse;
 use App\Support\ExpenseClosedPolicy;
 use App\Support\PublicParticipantChargeResolver;
-use App\Support\SafeDownloadFilename;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PublicExpenseController extends Controller
 {
@@ -276,18 +273,11 @@ class PublicExpenseController extends Controller
         ], 'Comprovante rejeitado.');
     }
 
-    public function downloadProof(Request $request, Charge $charge): StreamedResponse|JsonResponse
+    public function downloadProof(Request $request, Charge $charge): BinaryFileResponse|JsonResponse
     {
         $this->authorizeManage($request, $charge->expense);
 
-        $proof = $charge->latestProof();
-        if (! $proof) {
-            return ApiResponse::error('No proof found.', 'NOT_FOUND', 404);
-        }
-
-        $downloadName = SafeDownloadFilename::forProof((string) $proof->mime_type, $proof->original_filename);
-
-        return Storage::disk('local')->download($proof->file_path, $downloadName);
+        return ChargeProofHttpResponse::latest($charge, false);
     }
 
     public function viewLatestProof(Request $request, Charge $charge): BinaryFileResponse|JsonResponse

@@ -274,7 +274,8 @@ class PaymentValidationTest extends TestCase
         $this->actingAs($admin, 'sanctum')
             ->get("/api/v1/charges/{$charge1->id}/proofs/latest/view")
             ->assertStatus(404)
-            ->assertJsonPath('code', 'NOT_FOUND');
+            ->assertJsonPath('code', 'PROOF_NOT_FOUND')
+            ->assertJsonPath('message', 'Comprovante não encontrado.');
     }
 
     public function test_validate_charge_returns_expense_closed_when_expense_closed(): void

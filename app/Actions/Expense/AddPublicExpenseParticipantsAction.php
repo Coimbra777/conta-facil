@@ -7,7 +7,9 @@ use App\Models\Charge;
 use App\Models\Expense;
 use App\Models\ExpenseParticipant;
 use App\Services\ExpenseService;
+use App\Support\ParticipantPhoneUniqueness;
 use App\Support\PhoneNormalizer;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
 class AddPublicExpenseParticipantsAction
@@ -40,42 +42,50 @@ class AddPublicExpenseParticipantsAction
             $digits = PhoneNormalizer::digits((string) ($p['phone'] ?? ''));
             if ($digits !== '' && in_array($digits, $existingPhones, true)) {
                 throw new HttpApiException(
-                    'Participante com este telefone ja existe nesta despesa.',
-                    'DUPLICATE_PARTICIPANT',
+                    ParticipantPhoneUniqueness::MESSAGE,
+                    ParticipantPhoneUniqueness::CODE,
                     422,
                 );
             }
         }
 
-        return DB::transaction(function () use ($expense, $participants) {
-            foreach ($participants as $p) {
-                $digits = PhoneNormalizer::digits((string) ($p['phone'] ?? ''));
+        try {
+            return DB::transaction(function () use ($expense, $participants) {
+                foreach ($participants as $p) {
+                    $digits = PhoneNormalizer::digits((string) ($p['phone'] ?? ''));
 
-                $expenseParticipant = ExpenseParticipant::create([
-                    'expense_id' => $expense->id,
-                    'name' => trim((string) ($p['name'] ?? '')),
-                    'phone' => $p['phone'],
-                    'phone_normalized' => $digits !== '' ? $digits : null,
-                    'email' => null,
-                    'amount' => 0,
-                    'metadata' => null,
-                ]);
+                    $expenseParticipant = ExpenseParticipant::create([
+                        'expense_id' => $expense->id,
+                        'name' => trim((string) ($p['name'] ?? '')),
+                        'phone' => $p['phone'],
+                        'phone_normalized' => $digits !== '' ? $digits : null,
+                        'email' => null,
+                        'amount' => 0,
+                        'metadata' => null,
+                    ]);
 
-                Charge::create([
-                    'expense_participant_id' => $expenseParticipant->id,
-                    'expense_id' => $expense->id,
-                    'description' => $expense->description,
-                    'amount' => 0.0,
-                    'due_date' => $expense->due_date,
-                    'status' => 'pending',
-                ]);
+                    Charge::create([
+                        'expense_participant_id' => $expenseParticipant->id,
+                        'expense_id' => $expense->id,
+                        'description' => $expense->description,
+                        'amount' => 0.0,
+                        'due_date' => $expense->due_date,
+                        'status' => 'pending',
+                    ]);
+                }
+
+                $expense->refresh();
+
+                $this->expenseService->redistributeChargeAmounts($expense);
+
+                return $expense->fresh()->load(Charge::eagerChargesWithParticipant());
+            });
+        } catch (QueryException $e) {
+            if (ParticipantPhoneUniqueness::matchesQueryException($e)) {
+                throw ParticipantPhoneUniqueness::makeException();
             }
 
-            $expense->refresh();
-
-            $this->expenseService->redistributeChargeAmounts($expense);
-
-            return $expense->fresh()->load(Charge::eagerChargesWithParticipant());
-        });
+            throw $e;
+        }
     }
 }

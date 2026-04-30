@@ -4,6 +4,7 @@ import type {
     ApiStatus,
     Expense,
     LoginPayload,
+    PaginationMeta,
     Participant,
     PixKeyType,
     RegisterPayload,
@@ -366,16 +367,13 @@ async function authRegister(
             password_confirmation: payload.passwordConfirmation,
         }),
     });
-    const json = (await readJson(res)) as Record<string, unknown>;
-    if (!res.ok) {
-        if (res.status === 422 && json.errors)
-            throwLaravelValidation(json, res.status);
-        throw apiErr(String(json.message ?? "Não foi possível criar a conta."), {
-            status: res.status,
-        });
-    }
-    const user = json.user as Record<string, unknown>;
-    const token = json.token as string;
+    const json = await readJson(res);
+    const data = unwrapEnvelope<{ user: Record<string, unknown>; token: string }>(
+        json,
+        res,
+    );
+    const user = data.user;
+    const token = data.token;
     return { token, user: normalizeUser(user) };
 }
 
@@ -388,27 +386,13 @@ async function authLogin(
         headers: authHeaders(true),
         body: JSON.stringify(payload),
     });
-    const json = (await readJson(res)) as Record<string, unknown>;
-    if (!res.ok) {
-        const errs = json.errors as Record<string, string[]> | undefined;
-        if (
-            res.status === 422 &&
-            errs &&
-            typeof errs === "object" &&
-            Object.keys(errs).length > 0
-        ) {
-            throwLaravelValidation(json, res.status);
-        }
-        const code = typeof json.code === "string" ? json.code : undefined;
-        throw apiErr(String(json.message ?? "Credenciais inválidas."), {
-            status: res.status,
-            code:
-                code ??
-                (res.status === 401 ? "INVALID_CREDENTIALS" : undefined),
-        });
-    }
-    const user = json.user as Record<string, unknown>;
-    const token = json.token as string;
+    const json = await readJson(res);
+    const data = unwrapEnvelope<{ user: Record<string, unknown>; token: string }>(
+        json,
+        res,
+    );
+    const user = data.user;
+    const token = data.token;
     return { token, user: normalizeUser(user) };
 }
 
@@ -423,13 +407,9 @@ async function authMe(): Promise<User | null> {
         clearAuthStorage();
         return null;
     }
-    const json = (await readJson(res)) as Record<string, unknown>;
-    if (!res.ok) {
-        throw new ApiClientError(String(json.message ?? "Erro."), {
-            status: res.status,
-        });
-    }
-    const user = json.user as Record<string, unknown>;
+    const json = await readJson(res);
+    const data = unwrapEnvelope<{ user: Record<string, unknown> }>(json, res);
+    const user = data.user;
     return normalizeUser(user);
 }
 
@@ -476,7 +456,7 @@ async function publicV1Fetch<T>(
         const json = (await readJson(res)) as Record<string, unknown>;
         throw new ApiClientError(String(json.message ?? "Acesso negado."), {
             status: 403,
-            code: "FORBIDDEN",
+            code: typeof json.code === "string" ? json.code : "FORBIDDEN",
         });
     }
     const json = await readJson(res);
@@ -499,7 +479,7 @@ async function v1Fetch<T>(
         const json = (await readJson(res)) as Record<string, unknown>;
         throw new ApiClientError(String(json.message ?? "Acesso negado."), {
             status: 403,
-            code: "FORBIDDEN",
+            code: typeof json.code === "string" ? json.code : "FORBIDDEN",
         });
     }
     const json = await readJson(res);
@@ -507,6 +487,39 @@ async function v1Fetch<T>(
         return null as T;
     }
     return unwrapEnvelope<T>(json, res);
+}
+
+async function v1FetchEnvelope<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+): Promise<{ data: T; meta: Record<string, unknown> }> {
+    const base = getRealBaseUrl();
+    const res = await fetch(`${base}/api/v1${path}`, {
+        method,
+        headers: authHeaders(body !== undefined),
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (res.status === 401) throw onUnauthorized();
+    if (res.status === 403) {
+        const json = (await readJson(res)) as Record<string, unknown>;
+        throw new ApiClientError(String(json.message ?? "Acesso negado."), {
+            status: 403,
+            code: typeof json.code === "string" ? json.code : "FORBIDDEN",
+        });
+    }
+
+    const json = await readJson(res);
+    const data = unwrapEnvelope<T>(json, res);
+    const envelope = json as { meta?: Record<string, unknown> };
+
+    return {
+        data,
+        meta:
+            envelope.meta && typeof envelope.meta === "object"
+                ? envelope.meta
+                : {},
+    };
 }
 
 async function v1FetchBlob(path: string): Promise<Blob> {
@@ -567,14 +580,51 @@ export const api = {
             ? mockApi.logout()
             : authLogout().then(() => true),
 
-    listExpenses: async (): Promise<Expense[]> => {
-        if (useMockForProtected()) return mockApi.listExpenses();
-        const data = await v1Fetch<{ expenses: Record<string, unknown>[] }>(
+    listExpenses: async (
+        opts: { page?: number; perPage?: number } = {},
+    ): Promise<{ expenses: Expense[]; pagination: PaginationMeta }> => {
+        if (useMockForProtected()) {
+            const expenses = await mockApi.listExpenses();
+
+            return {
+                expenses,
+                pagination: {
+                    currentPage: 1,
+                    lastPage: 1,
+                    perPage: expenses.length,
+                    total: expenses.length,
+                },
+            };
+        }
+
+        const params = new URLSearchParams();
+        if (opts.page && opts.page > 1) params.set("page", String(opts.page));
+        if (opts.perPage) params.set("per_page", String(opts.perPage));
+
+        const path = params.size > 0 ? `/expenses?${params.toString()}` : `/expenses`;
+        const { data, meta } = await v1FetchEnvelope<{
+            expenses: Record<string, unknown>[];
+        }>(
             "GET",
-            `/expenses`,
+            path,
         );
         const list = data.expenses ?? [];
-        return list.map((e) => mapExpenseFromApi(e));
+        const pagination =
+            meta.pagination &&
+            typeof meta.pagination === "object" &&
+            !Array.isArray(meta.pagination)
+                ? (meta.pagination as Record<string, unknown>)
+                : {};
+
+        return {
+            expenses: list.map((e) => mapExpenseFromApi(e)),
+            pagination: {
+                currentPage: Number(pagination.current_page ?? 1),
+                lastPage: Number(pagination.last_page ?? 1),
+                perPage: Number(pagination.per_page ?? list.length),
+                total: Number(pagination.total ?? list.length),
+            },
+        };
     },
 
     getExpense: async (id: string): Promise<Expense | null> => {

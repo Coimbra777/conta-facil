@@ -3,6 +3,9 @@
 ## Autenticação
 
 - **Sanctum** com token **Bearer** (`Authorization: Bearer …`) nas rotas `/api/v1/*` protegidas.
+- Tokens de acesso têm expiração configurável por **`SANCTUM_TOKEN_EXPIRATION_MINUTES`**. Default do projeto: **43200 minutos (30 dias)**.
+- `login`, `register`, `me` e `logout` seguem o mesmo envelope `ApiResponse` do restante da API.
+- `logout` revoga o **token atual**.
 
 ## Gestão pública
 
@@ -11,6 +14,7 @@
 - **Fluxo principal atual:** organizador **autenticado** no painel. Gestão só com **`manage_token`** é **experimental / standby** como narrativa de produto (cobranças `created_by = null` não aparecem no painel).
 - **GET público** sem gestão retorna apenas **totais agregados** (quantidade de participantes, pagos, em aberto) — não lista nome/telefone/status por pessoa.
 - **`manage_token`** não autoriza mutação se a despesa já estiver **`closed`** — resposta **`EXPENSE_CLOSED`** (**422**); comprovantes antigos ainda podem ser lidos pelos endpoints dedicados quando permitido pela mesma autorização de gestão/dono.
+- Token inválido de gestão retorna **`INVALID_MANAGE_TOKEN`** (**403**).
 
 ### Criação sem cadastro (standby)
 
@@ -23,11 +27,22 @@
 
 ## Rate limiting
 
-- Limite global na API + limitadores nomeados (login, registro, rota `POST /api/public/expenses` — hoje **410 standby**, throttle ainda aplicado —, validação de participante, envio de comprovante, ações com manage).
+- Limite global na API + limitadores nomeados.
+- `auth-login`: **5/min** por IP + e-mail.
+- `auth-register`: **3/min** por IP.
+- `public-expense-show`: **60/min** por IP + hash.
+- `public-validate-participant`: **20/min** por IP + hash.
+- `public-submit-proof`: **10/min** por IP + hash.
+- `public-proof-download`: **20/min** por IP + charge.
+- `public-proof-preview`: **20/min** por IP + charge.
+- `public-sensitive-mutation`: **40/min** por IP + hash.
+- `public-charge-action`: **30/min** por IP + charge.
 
 ## Uploads
 
 - Validação por tipo e por **conteúdo** (magic bytes); tamanho limitado; armazenamento em disco não público; download com nome de arquivo seguro.
+- Ao excluir **`PaymentProof`**, **`Charge`**, participante ou despesa, o backend agenda a remoção do arquivo físico após commit.
+- Reenvio após rejeição mantém apenas o comprovante mais recente por cobrança; o arquivo antigo é removido para evitar acúmulo indefinido.
 
 ## CORS
 
@@ -35,11 +50,24 @@
 
 ## Headers HTTP
 
-- Middleware **`SecurityHeaders`** na API (ex.: `nosniff`, `X-Frame-Options`; HSTS quando HTTPS).
+- Middleware **`SecurityHeaders`** em API e SPA.
+- CSP mínima atual:
+  - `default-src 'self'`
+  - `script-src 'self'`
+  - `style-src 'self' 'unsafe-inline'`
+  - `img-src 'self' data: blob:`
+  - `connect-src 'self'`
+  - `frame-ancestors 'none'`
 
 ## localStorage
 
 - Token Sanctum guardado no cliente (ex.: React). **Risco:** XSS no mesmo origin pode ler o token. Mitigar com higiene de UI (evitar HTML não confiável, revisar `dangerouslySetInnerHTML`).
+- A CSP reduz a superfície para XSS refletido/persistido, mas **não elimina** o risco inerente ao armazenamento do Bearer em `localStorage`.
+
+## Minimização de dados
+
+- `UserResource` remove **CPF bruto** do contrato padrão da API.
+- O endpoint de sessão autenticada também não expõe `email_verified_at`.
 
 ## Melhorias futuras sugeridas
 

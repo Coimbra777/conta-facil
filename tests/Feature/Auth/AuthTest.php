@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Config;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -24,9 +25,15 @@ class AuthTest extends TestCase
 
         $response->assertStatus(201)
             ->assertJsonStructure([
-                'user' => ['id', 'name', 'email', 'phone', 'cpf', 'is_active', 'created_at', 'updated_at'],
-                'token',
+                'success',
+                'message',
+                'data' => [
+                    'user' => ['id', 'name', 'email', 'phone', 'is_active', 'created_at', 'updated_at'],
+                    'token',
+                ],
+                'meta',
             ]);
+        $response->assertJsonMissingPath('data.user.cpf');
 
         $this->assertDatabaseHas('users', [
             'email' => 'john@example.com',
@@ -77,8 +84,13 @@ class AuthTest extends TestCase
 
         $response->assertOk()
             ->assertJsonStructure([
-                'user' => ['id', 'name', 'email'],
-                'token',
+                'success',
+                'message',
+                'data' => [
+                    'user' => ['id', 'name', 'email'],
+                    'token',
+                ],
+                'meta',
             ]);
     }
 
@@ -91,6 +103,7 @@ class AuthTest extends TestCase
 
         $response->assertStatus(422)
             ->assertJson([
+                'success' => false,
                 'message' => 'Não encontramos uma conta com este e-mail.',
                 'code' => 'ACCOUNT_NOT_FOUND',
             ]);
@@ -110,6 +123,7 @@ class AuthTest extends TestCase
 
         $response->assertStatus(401)
             ->assertJson([
+                'success' => false,
                 'message' => 'E-mail ou senha inválidos.',
                 'code' => 'INVALID_CREDENTIALS',
             ]);
@@ -123,8 +137,9 @@ class AuthTest extends TestCase
             ->getJson('/api/v1/auth/me');
 
         $response->assertOk()
-            ->assertJsonPath('user.id', $user->id)
-            ->assertJsonPath('user.email', $user->email);
+            ->assertJsonPath('data.user.id', $user->id)
+            ->assertJsonPath('data.user.email', $user->email)
+            ->assertJsonMissingPath('data.user.cpf');
     }
 
     public function test_unauthenticated_user_cannot_access_me(): void
@@ -152,7 +167,8 @@ class AuthTest extends TestCase
             ->postJson('/api/v1/auth/logout');
 
         $response->assertOk()
-            ->assertJson(['message' => 'Você saiu da conta.']);
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Você saiu da conta.');
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
@@ -192,12 +208,55 @@ class AuthTest extends TestCase
         ]);
 
         $response->assertStatus(201)
-            ->assertJsonStructure(['user', 'token']);
+            ->assertJsonStructure([
+                'success',
+                'message',
+                'data' => ['user', 'token'],
+                'meta',
+            ]);
 
         $this->assertDatabaseHas('users', [
             'email' => 'john@example.com',
         ]);
 
         Http::assertNothingSent();
+    }
+
+    public function test_user_resource_does_not_expose_raw_cpf(): void
+    {
+        Http::fake();
+
+        $response = $this->postJson('/api/v1/auth/register', [
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+            'cpf' => '12345678901',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonMissingPath('data.user.cpf')
+            ->assertJsonMissingPath('data.user.email_verified_at');
+    }
+
+    public function test_sanctum_token_expiration_is_configurable(): void
+    {
+        Config::set('sanctum.expiration', 60);
+
+        $response = $this->postJson('/api/v1/auth/register', [
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ]);
+
+        $response->assertCreated();
+
+        $user = User::query()->where('email', 'john@example.com')->firstOrFail();
+        $token = $user->tokens()->first();
+
+        $this->assertNotNull($token);
+        $this->assertNotNull($token?->expires_at);
+        $this->assertTrue($token->expires_at->between(now()->addMinutes(59), now()->addMinutes(61)));
     }
 }

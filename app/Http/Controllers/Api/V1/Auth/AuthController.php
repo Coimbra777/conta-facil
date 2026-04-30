@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Auth\LoginRequest;
 use App\Http\Requests\Api\V1\Auth\RegisterRequest;
 use App\Http\Resources\UserResource;
+use App\Http\Responses\ApiResponse;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -17,12 +18,12 @@ class AuthController extends Controller
     {
         $user = User::create($request->validated());
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $this->issueToken($user);
 
-        return response()->json([
-            'user' => new UserResource($user->refresh()),
+        return ApiResponse::success([
+            'user' => (new UserResource($user->refresh()))->resolve(),
             'token' => $token,
-        ], 201);
+        ], 'Conta criada com sucesso.', 201);
     }
 
     public function login(LoginRequest $request): JsonResponse
@@ -40,27 +41,29 @@ class AuthController extends Controller
         $user = User::query()->where('email', $email)->first();
 
         if ($user === null) {
-            return response()->json([
-                'message' => 'Não encontramos uma conta com este e-mail.',
-                'code' => 'ACCOUNT_NOT_FOUND',
-            ], 422);
+            return ApiResponse::error(
+                'Não encontramos uma conta com este e-mail.',
+                'ACCOUNT_NOT_FOUND',
+                422,
+            );
         }
 
         if (! Hash::check($password, $user->password)) {
-            return response()->json([
-                'message' => 'E-mail ou senha inválidos.',
-                'code' => 'INVALID_CREDENTIALS',
-            ], 401);
+            return ApiResponse::error(
+                'E-mail ou senha inválidos.',
+                'INVALID_CREDENTIALS',
+                401,
+            );
         }
 
         Auth::login($user);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $token = $this->issueToken($user);
 
-        return response()->json([
-            'user' => new UserResource($user),
+        return ApiResponse::success([
+            'user' => (new UserResource($user))->resolve(),
             'token' => $token,
-        ]);
+        ], 'Login realizado com sucesso.');
     }
 
     public function logout(): JsonResponse
@@ -68,17 +71,25 @@ class AuthController extends Controller
         /** @var User $user */
         $user = Auth::user();
 
-        $user->currentAccessToken()->delete();
+        $user->currentAccessToken()?->delete();
 
-        return response()->json([
-            'message' => 'Você saiu da conta.',
-        ]);
+        return ApiResponse::success(null, 'Você saiu da conta.');
     }
 
     public function me(): JsonResponse
     {
-        return response()->json([
-            'user' => new UserResource(Auth::user()),
+        return ApiResponse::success([
+            'user' => (new UserResource(Auth::user()))->resolve(),
         ]);
+    }
+
+    private function issueToken(User $user): string
+    {
+        $expirationMinutes = (int) config('sanctum.expiration', 0);
+        $expiresAt = $expirationMinutes > 0
+            ? now()->addMinutes($expirationMinutes)
+            : null;
+
+        return $user->createToken('auth_token', ['*'], $expiresAt)->plainTextToken;
     }
 }

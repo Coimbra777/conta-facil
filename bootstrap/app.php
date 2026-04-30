@@ -26,6 +26,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'public-expense-create-standby' => PublicAnonymousExpenseCreationStandby::class,
         ]);
+        $middleware->web(append: [
+            SecurityHeaders::class,
+        ]);
         $middleware->api(append: [
             SecurityHeaders::class,
         ]);

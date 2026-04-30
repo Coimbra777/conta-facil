@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Http\Responses\ApiResponse;
 use App\Models\Charge;
+use App\Services\PaymentProofService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -18,12 +19,20 @@ final class ChargeProofHttpResponse
     {
         $proof = $charge->latestProof();
         if (! $proof) {
-            return ApiResponse::error('No proof found.', 'NOT_FOUND', 404);
+            return ApiResponse::error(
+                PaymentProofService::PROOF_NOT_FOUND_MESSAGE,
+                PaymentProofService::PROOF_NOT_FOUND_CODE,
+                404,
+            );
         }
 
         $disk = Storage::disk('local');
         if (! $disk->exists($proof->file_path)) {
-            return ApiResponse::error('Arquivo não encontrado.', 'NOT_FOUND', 404);
+            return ApiResponse::error(
+                PaymentProofService::PROOF_NOT_FOUND_MESSAGE,
+                PaymentProofService::PROOF_NOT_FOUND_CODE,
+                404,
+            );
         }
 
         $absolutePath = $disk->path($proof->file_path);
