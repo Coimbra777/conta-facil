@@ -32,7 +32,8 @@ services:
         restart: unless-stopped
         environment:
             MYSQL_DATABASE: ${DB_DATABASE:-laravel}
-            MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+            # Na 1ª criação do volume; só altera pelo container se apagar dados.
+            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-${DB_PASSWORD:-root}}
             MYSQL_PASSWORD: ${DB_PASSWORD:-userpass}
             MYSQL_USER: ${DB_USERNAME:-username}
         volumes:
@@ -52,7 +53,7 @@ services:
         environment:
             PMA_HOST: db
             PMA_PORT: 3306
-            MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-${DB_PASSWORD:-root}}
         networks:
             - laravel
 

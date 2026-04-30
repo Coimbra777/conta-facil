@@ -1,6 +1,6 @@
 Você é um Tech Lead especialista em Laravel, segurança, APIs REST, LGPD e prontidão para produção.
 
-Analise o repositório inteiro antes de alterar qualquer coisa. O objetivo é executar a FASE 1 — HARDENING do sistema ContaCerta/Conta Fácil, deixando o sistema menos frágil para produção, sem mudar o escopo funcional principal.
+Analise o repositório inteiro antes de alterar qualquer coisa. O objetivo é executar a FASE 1 — HARDENING do sistema ContaCerta/Conta Certa, deixando o sistema menos frágil para produção, sem mudar o escopo funcional principal.
 
 Contexto do produto:
 É um sistema de cobrança compartilhada com:

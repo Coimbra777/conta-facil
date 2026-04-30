@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ config('app.name', 'Conta Fácil') }}</title>
+    <title>{{ config('app.name', 'Conta Certa') }}</title>
     @php
         $spaDir = public_path('spa');
         $manifestPath = $spaDir . '/.vite/manifest.json';

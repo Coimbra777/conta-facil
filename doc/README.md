@@ -1,4 +1,4 @@
-# Documentação técnica — ContaCerta Pix / Conta Fácil
+# Documentação técnica — ContaCerta Pix / Conta Certa
 
 | Documento | Conteúdo |
 |-----------|-----------|
