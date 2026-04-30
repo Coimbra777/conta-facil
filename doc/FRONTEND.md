@@ -30,14 +30,14 @@
 
 ## API client
 
-- Cobranças autenticadas: `GET/POST /expenses`, `POST /expenses/{id}/participants`, `GET /expenses/{id}`, `DELETE /expenses/{id}` — sem `ensureTeamId` nem `/teams/.../expenses`.
+- Cobranças autenticadas: `GET/POST /expenses`, `POST /expenses/{id}/participants`, `GET /expenses/{id}`, `DELETE /expenses/{id}`.
 - `getToken` / `setToken` — `localStorage` chave `contacerta:auth:v1`.
 - Rotas autenticadas: `v1Fetch` com Bearer.
 - Rotas públicas sensíveis: **`publicV1Fetch`** para `validate-participant` (sem Bearer); `getPublicExpense` / `submitProof` usam `fetch` sem header de auth.
 - **401** em rotas autenticadas: limpa token e redireciona para `/login`.
 - **403**: mensagem de acesso negado.
 - **422**: erros de validação mapeados para `ApiClientError`.
-- Domínio na UI: lista agregada **`participants`**; cada charge na API traz **`participant`**. Respostas públicas/autenticadas usam **`amount_per_participant`**; o client aceita `amount_per_member` só como fallback para payload antigo em cache.
+- Domínio na UI: lista agregada **`participants`**; cada charge na API traz **`participant`**. Respostas usam **`amount_per_participant`**.
 
 ## Build
 

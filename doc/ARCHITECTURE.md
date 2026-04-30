@@ -16,7 +16,7 @@ Laravel (PHP-FPM) — rotas web: SPA shell; rotas /api/*: JSON
 ## Backend: Laravel 12 API
 
 - **Prefixo:** `routes/api.php` → URI base `/api` + grupos `v1`.
-- **Cobranças autenticadas:** CRUD e participantes em `/api/v1/expenses` (dono: `created_by`). Endpoints de equipe não fazem parte do runtime atual (apenas schema/tabelas legadas para evolução futura).
+- **Cobranças autenticadas:** CRUD e participantes em `/api/v1/expenses` (dono: `created_by`).
 - **Resposta padrão de domínio:** `App\Http\Responses\ApiResponse` (`success`, `message`, `data`, `meta` / erros com `code`).
 - **Exceção HTTP:** `HttpApiException` mapeada em `bootstrap/app.php` para o envelope.
 - **Auth:** Laravel Sanctum **Bearer token** (sem cookie SPA stateful neste projeto).
@@ -42,13 +42,11 @@ Laravel (PHP-FPM) — rotas web: SPA shell; rotas /api/*: JSON
 - **Produção/dev:** MySQL 8 (`utf8mb4` / `utf8mb4_unicode_ci`).
 - **Testes PHPUnit:** SQLite `:memory:` via `phpunit.xml` (sem exigir MySQL na CI).
 
-### Cobrança compartilhada vs módulo `teams`
+### Modelagem de cobrança compartilhada
 
-O fluxo principal de cobrança usa **`expense_participants`**: cada linha é um snapshot (nome, telefone, valor) daquele participante **naquela** `Expense`. As **`charges`** ligam-se preferencialmente a `expense_participant_id`; `charges.team_member_id` permanece para dados legados e compatibilidade.
+Relação principal: **`users`** → **`expenses`** (`created_by`) → **`expense_participants`** → **`charges`** (`expense_participant_id`) → **`payment_proofs`**.
 
-O módulo **`teams` / `team_members`** foi preservado para futuras features como times de futebol, grupos recorrentes ou agenda de contatos, mas **não representa** mais o participante da cobrança no fluxo atual — quem divide o Pix é sempre modelado via `expense_participants`.
-
-Detalhes do legado no schema e plano de remoção: **`doc/LEGACY.md`**.
+Cada linha em **`expense_participants`** é um snapshot (nome, telefone, valor) daquele participante **naquela** despesa. **`charges`** sempre referenciam `expense_participant_id`.
 
 ## Decisões arquiteturais relevantes
 

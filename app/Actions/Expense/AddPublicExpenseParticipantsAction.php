@@ -7,7 +7,6 @@ use App\Models\Charge;
 use App\Models\Expense;
 use App\Models\ExpenseParticipant;
 use App\Services\ExpenseService;
-use App\Support\ChargeParticipantResolver;
 use App\Support\PhoneNormalizer;
 use Illuminate\Support\Facades\DB;
 
@@ -29,10 +28,10 @@ class AddPublicExpenseParticipantsAction
         }
 
         $existingPhones = $expense->charges()
-            ->with(ChargeParticipantResolver::CHARGE_SNAPSHOT_RELATIONS)
+            ->with(Charge::EAGER_WITH_PARTICIPANT)
             ->get()
             ->map(fn (Charge $c) => PhoneNormalizer::digits(
-                (string) (ChargeParticipantResolver::identitySnapshot($c)['phone'] ?? '')
+                (string) ($c->participantIdentity()['phone'] ?? '')
             ))
             ->filter()
             ->all();
@@ -63,8 +62,6 @@ class AddPublicExpenseParticipantsAction
                 ]);
 
                 Charge::create([
-                    'team_member_id' => null,
-                    'user_id' => null,
                     'expense_participant_id' => $expenseParticipant->id,
                     'expense_id' => $expense->id,
                     'description' => $expense->description,
@@ -78,7 +75,7 @@ class AddPublicExpenseParticipantsAction
 
             $this->expenseService->redistributeChargeAmounts($expense);
 
-            return $expense->fresh()->load(ChargeParticipantResolver::eagerLoadChargesWithSnapshots());
+            return $expense->fresh()->load(Charge::eagerChargesWithParticipant());
         });
     }
 }

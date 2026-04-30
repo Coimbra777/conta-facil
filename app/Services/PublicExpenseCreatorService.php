@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\Charge;
 use App\Models\Expense;
 use App\Models\ExpenseParticipant;
-use App\Support\ChargeParticipantResolver;
 use Illuminate\Support\Facades\DB;
 
 class PublicExpenseCreatorService
@@ -21,13 +20,12 @@ class PublicExpenseCreatorService
             $totalAmount = (float) $data['amount'];
 
             $expense = Expense::create([
-                'team_id' => null,
                 'created_by' => null,
                 'owner_name' => $data['owner_name'],
                 'owner_phone' => $data['owner_phone'],
                 'description' => $data['description'],
                 'total_amount' => $totalAmount,
-                'amount_per_member' => 0,
+                'amount_per_participant' => 0,
                 'due_date' => $data['due_date'],
                 'pix_key' => $data['pix_key'],
                 'pix_qr_code' => $data['pix_qr_code'] ?? null,
@@ -48,8 +46,6 @@ class PublicExpenseCreatorService
                 ]);
 
                 Charge::create([
-                    'team_member_id' => null,
-                    'user_id' => null,
                     'expense_participant_id' => $expenseParticipant->id,
                     'expense_id' => $expense->id,
                     'description' => $data['description'],
@@ -61,7 +57,7 @@ class PublicExpenseCreatorService
 
             $this->expenseService->redistributeChargeAmounts($expense);
 
-            return $expense->load(ChargeParticipantResolver::eagerLoadChargesWithSnapshots());
+            return $expense->load(Charge::eagerChargesWithParticipant());
         });
     }
 }

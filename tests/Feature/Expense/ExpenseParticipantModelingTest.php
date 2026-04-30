@@ -6,7 +6,6 @@ use App\Http\Resources\ChargeResource;
 use App\Models\Charge;
 use App\Models\Expense;
 use App\Models\ExpenseParticipant;
-use App\Models\TeamMember;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -26,7 +25,7 @@ class ExpenseParticipantModelingTest extends TestCase
     private function expensePayload(array $overrides = []): array
     {
         return array_merge([
-            'description' => 'Team dinner',
+            'description' => 'Group dinner',
             'total_amount' => 100.00,
             'due_date' => now()->addDays(3)->format('Y-m-d'),
             'pix_key' => '11999999999',
@@ -72,20 +71,16 @@ class ExpenseParticipantModelingTest extends TestCase
         }
     }
 
-    /**
-     * Legado: cobrança com team_member_id + expense_participant_id — API deve preferir o snapshot do participante da despesa.
-     */
-    public function test_charge_resource_prefers_expense_participant_snapshot_over_team_member(): void
+    public function test_charge_resource_uses_expense_participant_snapshot(): void
     {
         $admin = User::factory()->create();
 
         $expense = Expense::factory()->create([
-            'team_id' => null,
             'created_by' => $admin->id,
             'total_amount' => 50,
             'due_date' => now()->addDays(3)->format('Y-m-d'),
             'pix_key' => '11999999999',
-            'amount_per_member' => 50,
+            'amount_per_participant' => 50,
         ]);
 
         $ep = ExpenseParticipant::create([
@@ -96,11 +91,8 @@ class ExpenseParticipantModelingTest extends TestCase
             'amount' => 50,
         ]);
 
-        $tm = TeamMember::factory()->create(['name' => 'Nome Agenda']);
-
         $charge = Charge::create([
             'expense_id' => $expense->id,
-            'team_member_id' => $tm->id,
             'expense_participant_id' => $ep->id,
             'description' => $expense->description,
             'amount' => 50,
@@ -108,12 +100,12 @@ class ExpenseParticipantModelingTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $tm->update(['name' => 'Nome Agenda Alterado']);
+        $ep->update(['name' => 'Nome Atualizado']);
 
-        $charge->refresh()->load(['expenseParticipant', 'teamMember']);
+        $charge->refresh()->load('expenseParticipant');
         $payload = (new ChargeResource($charge))->resolve(request());
 
-        $this->assertSame('Nome Na Cobrança', $payload['participant']['name']);
+        $this->assertSame('Nome Atualizado', $payload['participant']['name']);
         $this->assertArrayNotHasKey('member', $payload);
     }
 

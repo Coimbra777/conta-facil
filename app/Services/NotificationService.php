@@ -5,28 +5,20 @@ namespace App\Services;
 use App\Helpers\ApiWhatsappHelper;
 use App\Models\Charge;
 use App\Models\Expense;
-use App\Support\ChargeParticipantResolver;
 use Illuminate\Support\Facades\Log;
 
 class NotificationService
 {
     public function __construct(private ApiWhatsappHelper $whatsappHelper) {}
 
-    /**
-     * Destinatário derivado de {@see ChargeParticipantResolver} (snapshot ou legado team_members).
-     */
     public function notifyChargeRecipient(Charge $charge, ?Expense $expense = null): void
     {
-        ChargeParticipantResolver::loadSnapshotRelations($charge);
-
+        $charge->loadMissing('expenseParticipant');
         $participant = $charge->expenseParticipant;
-        $legacy = $charge->teamMember;
 
-        $name = $participant?->name ?? $legacy?->name;
-        $phone = $participant?->phone ?? $legacy?->phone;
-        $log = $participant !== null
-            ? ['expense_participant_id' => $participant->id]
-            : ['team_member_id' => $legacy?->id];
+        $name = $participant?->name;
+        $phone = $participant?->phone ?? $participant?->phone_normalized;
+        $log = ['expense_participant_id' => $participant?->id];
 
         $this->deliverChargeWhatsApp($name, $phone, $charge, $expense, $log);
     }

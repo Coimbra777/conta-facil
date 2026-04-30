@@ -19,7 +19,7 @@ class ExpenseResource extends JsonResource
             'description' => $this->description,
             'total_amount' => $this->total_amount,
             'due_date' => $this->due_date,
-            'amount_per_participant' => $this->amount_per_member,
+            'amount_per_participant' => $this->amount_per_participant,
             'pix_key' => $this->pix_key,
             'pix_qr_code' => $this->pix_qr_code,
             'status' => $this->status,

@@ -34,7 +34,7 @@ class NotificationTest extends TestCase
         $charge = Charge::factory()->create();
         $charge->expenseParticipant->update(['phone' => '11999999999']);
 
-        $service->notifyChargeRecipient($charge->fresh(['expenseParticipant', 'teamMember']));
+        $service->notifyChargeRecipient($charge->fresh(['expenseParticipant']));
     }
 
     public function test_notification_logs_when_phone_missing(): void
@@ -52,7 +52,7 @@ class NotificationTest extends TestCase
             ->once()
             ->withArgs(fn ($msg) => str_contains($msg, 'missing phone'));
 
-        $service->notifyChargeRecipient($charge->fresh(['expenseParticipant', 'teamMember']));
+        $service->notifyChargeRecipient($charge->fresh(['expenseParticipant']));
     }
 
     public function test_notification_logs_when_whatsapp_fails(): void
@@ -71,7 +71,7 @@ class NotificationTest extends TestCase
             ->once()
             ->withArgs(fn ($msg) => str_contains($msg, 'not delivered'));
 
-        $service->notifyChargeRecipient($charge->fresh(['expenseParticipant', 'teamMember']));
+        $service->notifyChargeRecipient($charge->fresh(['expenseParticipant']));
     }
 
     public function test_whatsapp_helper_sends_real_http_post(): void

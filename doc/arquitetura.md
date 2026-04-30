@@ -4,13 +4,11 @@
 
 ## Visao Geral
 
-Sistema de divisao de despesas (Caixinha) com pagamento PIX via Asaas.
+Sistema de **cobrança compartilhada via Pix** com API Laravel e SPA React. Fluxo principal: **User → Expense → ExpenseParticipant → Charge → PaymentProof**. Documentação consolidada: **[ARCHITECTURE.md](./ARCHITECTURE.md)**.
 
 ```
-[React SPA / Vite]  ←HTTP→  [API REST Laravel]  ←→  [Asaas API]
-   localhost:5173          Sanctum (Bearer)        PIX / Webhook
-   ou / via public/spa     Services
-                           Eloquent
+[React SPA / Vite]  ←HTTP→  [API REST Laravel]
+   Vite dev ou /public/spa    Sanctum (Bearer) + rotas públicas por hash
 ```
 
 ## Backend
@@ -32,72 +30,61 @@ Database (MySQL)
 | Controller | Responsabilidade |
 |-----------|-----------------|
 | AuthController | Login, registro, logout, me |
-| TeamController | CRUD equipes + dashboard |
-| TeamMemberController | Add/remove membros |
-| ExpenseController | CRUD despesas |
-| ChargeController | Cobrancas individuais + sync |
-| WebhookController | Webhooks Asaas |
+| ExpenseController | CRUD cobranças autenticadas |
+| PublicExpenseController | Link público, comprovantes, gestão com token |
+| ChargeValidationController | Validar/rejeitar/download comprovante (autenticado) |
 
 ### Services
 
 | Service | Responsabilidade |
 |---------|-----------------|
-| AsaasClient | HTTP client centralizado para API Asaas |
-| AsaasCustomerService | Criar customer (idempotente) |
-| AsaasChargeService | Criar cobranca PIX, buscar QR Code, consultar pagamento |
-| ChargeService | Orquestrar criacao de charge + sync |
-| ExpenseService | Dividir despesa entre membros, criar charges |
+| ExpenseService | CRUD cobrança, participantes, redistribuição de valores |
+| PublicExpenseCreatorService | Criação pública sem usuário |
+| PaymentProofService | Upload e armazenamento de comprovantes |
+| NotificationService | Notificações (ex.: WhatsApp stub) |
 
-### Models e Relacionamentos
+### Models e Relacionamentos (atual)
 
 ```
 User
-  ├── hasMany Charge
-  ├── hasMany Team (owner)
-  └── belongsToMany Team (via team_members)
-
-Team
-  ├── belongsTo User (owner)
-  ├── belongsToMany User (members, com pivot role)
-  └── hasMany Expense
+  └── hasMany Expense (created_by)
 
 Expense
-  ├── belongsTo Team
-  ├── belongsTo User (created_by)
+  ├── belongsTo User (created_by, opcional no fluxo público)
+  ├── hasMany ExpenseParticipant
   └── hasMany Charge
 
+ExpenseParticipant
+  ├── belongsTo Expense
+  └── hasOne Charge
+
 Charge
-  ├── belongsTo User
-  └── belongsTo Expense (nullable)
+  ├── belongsTo Expense
+  ├── belongsTo ExpenseParticipant
+  └── hasMany PaymentProof
 ```
+
+_O trecho abaixo descreve um desenho antigo (Asaas / equipes) e não reflete o código atual._
+
+<details>
+<summary>Histórico / legado (ignorar)</summary>
 
 ### Fluxo de Criacao de Despesa
 
 ```
 1. Admin cria despesa no time
 2. ExpenseService valida todos os membros tem Asaas
-3. Calcula split (floor + resto no ultimo)
-4. Para cada membro:
-   a. ChargeService.createCharge()
-   b. AsaasChargeService.createPixCharge() → POST /payments
-   c. AsaasChargeService.getPixQrCode() → GET /payments/{id}/pixQrCode
-   d. Salva Charge no banco com PIX data
-5. Retorna Expense com todas as Charges
+...
 ```
 
 ### Fluxo de Pagamento (Webhook)
 
 ```
 1. Usuario paga PIX
-2. Asaas envia webhook → POST /api/v1/webhooks/asaas
-3. WebhookController:
-   a. Valida token do header
-   b. Busca Charge por asaas_charge_id
-   c. Atualiza status + paid_at (idempotente)
-   d. Se charge tem expense_id:
-      - Recalcula status da Expense
-      - open → PARTIALLY_PAID → PAID
+2. Asaas envia webhook ...
 ```
+
+</details>
 
 ## Frontend
 
@@ -131,50 +118,36 @@ Com o frontend em origem diferente (ex.: `http://localhost:5173`), use `CORS_ALL
 
 - Senhas hasheadas via model cast (`'hashed'`)
 - Tokens Sanctum com revogacao individual
-- `asaas_customer_id` nunca exposto nas respostas (hidden no model)
-- API key nunca logada
-- Webhook protegido por token no header
-- Autorizacao inline em controllers (membership + role check)
-- Rate limiting: 60 req/min na API
-- Validacao completa via FormRequest em todos os endpoints
-- CORS configurado para o host do Vite em desenvolvimento e para o domínio do SPA em produção, quando aplicável
+- Cobrança autenticada: apenas `created_by`; público: `manage_token` / `X-Manage-Token`
+- Rate limiting na API
+- Validação via Form Requests; upload de comprovante validado no servidor
+- CORS conforme `config/cors.php`
 
 ## Testes
 
-42 testes cobrindo:
-- Autenticacao (11 testes)
-- Cobrancas + webhook (13 testes)
-- Despesas + split + dashboard (10 testes)
-- Equipes + membros (7 testes)
-- Exemplo (1 teste)
-
 ```bash
-docker compose exec app php artisan test
+docker compose run --rm app php artisan test
 ```
+
+Veja também **`doc/BACKEND.md`**.
 
 ## Banco de Dados
 
-### Tabelas
+### Tabelas principais
 
 | Tabela | Descricao |
 |--------|-----------|
-| users | Usuarios com asaas_customer_id |
+| users | Usuários |
 | personal_access_tokens | Tokens Sanctum |
-| teams | Equipes |
-| team_members | Pivot usuario-equipe com role |
-| expenses | Despesas do time |
-| charges | Cobrancas PIX individuais |
-| sessions | Sessoes web |
-| cache | Cache do framework |
-| jobs | Fila de jobs |
+| expenses | Cobranças / despesas |
+| expense_participants | Snapshot de participantes por despesa |
+| charges | Valor devido por participante |
+| payment_proofs | Comprovantes enviados |
+| sessions / cache / jobs | Infra Laravel |
 
 ### Variaveis de Ambiente
 
-| Variavel | Descricao |
-|----------|-----------|
-| ASAAS_API_URL | URL base da API Asaas (sandbox ou producao) |
-| ASAAS_API_KEY | Chave da API Asaas |
-| ASAAS_WEBHOOK_TOKEN | Token para validar webhooks |
+Variáveis específicas do projeto em `.env.example` (API, WhatsApp opcional, armazenamento).
 
 ## Docker
 

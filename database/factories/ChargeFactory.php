@@ -17,8 +17,6 @@ class ChargeFactory extends Factory
     public function definition(): array
     {
         return [
-            'user_id' => null,
-            'team_member_id' => null,
             'expense_participant_id' => null,
             'expense_id' => Expense::factory(),
             'description' => fake()->sentence(),
@@ -31,7 +29,7 @@ class ChargeFactory extends Factory
 
     public function configure(): static
     {
-        return $this->afterCreating(function (Charge $charge): void {
+        return $this->afterMaking(function (Charge $charge): void {
             if ($charge->expense_participant_id !== null) {
                 return;
             }
@@ -40,7 +38,7 @@ class ChargeFactory extends Factory
                 'expense_id' => $charge->expense_id,
             ]);
 
-            $charge->update(['expense_participant_id' => $participant->id]);
+            $charge->expense_participant_id = $participant->id;
         });
     }
 

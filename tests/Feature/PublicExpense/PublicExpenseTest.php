@@ -21,13 +21,12 @@ class PublicExpenseTest extends TestCase
         $admin = User::factory()->create();
 
         $expense = Expense::create([
-            'team_id' => null,
             'created_by' => $admin->id,
             'owner_name' => 'Dono Teste',
             'owner_phone' => '11988887777',
             'description' => 'Churrasco',
             'total_amount' => 100.00,
-            'amount_per_member' => 50.00,
+            'amount_per_participant' => 50.00,
             'due_date' => now()->addDays(3)->format('Y-m-d'),
             'pix_key' => '11999999999',
             'pix_qr_code' => base64_encode('fake-qr'),
@@ -57,7 +56,6 @@ class PublicExpenseTest extends TestCase
         $charge1 = Charge::create([
             'expense_id' => $expense->id,
             'expense_participant_id' => $ep1->id,
-            'team_member_id' => null,
             'amount' => 50.00,
             'due_date' => $expense->due_date,
             'status' => 'pending',
@@ -66,7 +64,6 @@ class PublicExpenseTest extends TestCase
         $charge2 = Charge::create([
             'expense_id' => $expense->id,
             'expense_participant_id' => $ep2->id,
-            'team_member_id' => null,
             'amount' => 50.00,
             'due_date' => $expense->due_date,
             'status' => 'pending',
@@ -83,13 +80,12 @@ class PublicExpenseTest extends TestCase
         $admin = User::factory()->create();
 
         $expense = Expense::create([
-            'team_id' => null,
             'created_by' => $admin->id,
             'owner_name' => 'Dono Teste',
             'owner_phone' => '11988887777',
             'description' => 'Rateio',
             'total_amount' => 500.00,
-            'amount_per_member' => 500.00,
+            'amount_per_participant' => 500.00,
             'due_date' => now()->addDays(3)->format('Y-m-d'),
             'pix_key' => '11999999999',
             'pix_qr_code' => base64_encode('fake-qr'),
@@ -111,7 +107,6 @@ class PublicExpenseTest extends TestCase
         $charge = Charge::create([
             'expense_id' => $expense->id,
             'expense_participant_id' => $ep->id,
-            'team_member_id' => null,
             'amount' => 500.00,
             'due_date' => $expense->due_date,
             'status' => 'pending',

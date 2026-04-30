@@ -18,11 +18,10 @@ class ApiEnvelopeResponseTest extends TestCase
         $admin = User::factory()->create();
 
         $expense = Expense::create([
-            'team_id' => null,
             'created_by' => $admin->id,
             'description' => 'Test',
             'total_amount' => 10.00,
-            'amount_per_member' => 10.00,
+            'amount_per_participant' => 10.00,
             'due_date' => now()->addDay()->format('Y-m-d'),
             'pix_key' => 'pix',
             'status' => 'open',
@@ -43,7 +42,6 @@ class ApiEnvelopeResponseTest extends TestCase
         Charge::create([
             'expense_id' => $expense->id,
             'expense_participant_id' => $ep->id,
-            'team_member_id' => null,
             'amount' => 10.00,
             'due_date' => $expense->due_date,
             'status' => 'pending',

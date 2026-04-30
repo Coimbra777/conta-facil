@@ -23,16 +23,12 @@
 | Entidade | Papel |
 |----------|--------|
 | `User` | Organizador autenticado |
-| `Team` | Tabela legada/futura; não há rotas REST de equipe na API v1 atual |
-| `TeamMember` | Cadastro legado/futuro no time (não é mais a fonte da verdade do participante na cobrança) |
-| `Expense` | Cobrança/despesa; `public_hash`, `manage_token`, Pix, total, vencimento, status |
-| `ExpenseParticipant` | Snapshot do participante **nesta** cobrança (nome, telefone, valor); histórico preservado |
-| `Charge` | Valor devido por participante; JSON com `participant`; coluna legado opcional `team_member_id` |
+| `Expense` | Cobrança/despesa; `public_hash`, `manage_token`, Pix, total, vencimento, status; `created_by` opcional (fluxo público anônimo) |
+| `ExpenseParticipant` | Snapshot do participante **nesta** cobrança (nome, telefone, valor) |
+| `Charge` | Valor devido ao participante; `expense_participant_id`; JSON da API com **`participant`** |
 | `PaymentProof` | Arquivo de comprovante ligado à cobrança |
 
-Ver **`doc/LEGACY.md`** para remoção futura de times no banco.
-
-O módulo `teams` / `team_members` foi preservado para futuras features como times de futebol, grupos recorrentes ou agenda de contatos, mas o fluxo principal de cobrança usa **`expense_participants`**.
+Modelagem: **`User → Expense → ExpenseParticipant → Charge → PaymentProof`**.
 
 ## Status da cobrança (`Charge`)
 

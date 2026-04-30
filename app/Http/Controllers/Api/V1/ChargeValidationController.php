@@ -11,7 +11,6 @@ use App\Http\Requests\Api\V1\RejectChargeRequest;
 use App\Http\Resources\ChargeResource;
 use App\Http\Responses\ApiResponse;
 use App\Models\Charge;
-use App\Support\ChargeParticipantResolver;
 use App\Support\ExpenseAuthorizer;
 use App\Support\SafeDownloadFilename;
 use Illuminate\Http\JsonResponse;
@@ -28,7 +27,7 @@ class ChargeValidationController extends Controller
         $charge = $validateChargeAction->execute($charge, ChargeActionAudience::EXPENSE_OWNER);
 
         return ApiResponse::success([
-            'charge' => (new ChargeResource($charge->load(ChargeParticipantResolver::CHARGE_SNAPSHOT_RELATIONS)))->resolve(),
+            'charge' => (new ChargeResource($charge->load(Charge::EAGER_WITH_PARTICIPANT)))->resolve(),
         ], 'Pagamento validado.');
     }
 
@@ -43,7 +42,7 @@ class ChargeValidationController extends Controller
         );
 
         return ApiResponse::success([
-            'charge' => (new ChargeResource($charge->load(ChargeParticipantResolver::CHARGE_SNAPSHOT_RELATIONS)))->resolve(),
+            'charge' => (new ChargeResource($charge->load(Charge::EAGER_WITH_PARTICIPANT)))->resolve(),
         ], 'Comprovante rejeitado.');
     }
 

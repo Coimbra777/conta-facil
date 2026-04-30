@@ -24,11 +24,10 @@ class PaymentValidationTest extends TestCase
         $admin = User::factory()->create();
 
         $expense = Expense::create([
-            'team_id' => null,
             'created_by' => $admin->id,
             'description' => 'Test expense',
             'total_amount' => 100.00,
-            'amount_per_member' => 50.00,
+            'amount_per_participant' => 50.00,
             'due_date' => now()->addDays(3)->format('Y-m-d'),
             'pix_key' => '11999999999',
             'status' => 'open',
@@ -57,7 +56,6 @@ class PaymentValidationTest extends TestCase
         $charge1 = Charge::create([
             'expense_id' => $expense->id,
             'expense_participant_id' => $epAdmin->id,
-            'team_member_id' => null,
             'amount' => 50.00,
             'due_date' => $expense->due_date,
             'status' => 'proof_sent',
@@ -66,7 +64,6 @@ class PaymentValidationTest extends TestCase
         $charge2 = Charge::create([
             'expense_id' => $expense->id,
             'expense_participant_id' => $epMaria->id,
-            'team_member_id' => null,
             'amount' => 50.00,
             'due_date' => $expense->due_date,
             'status' => 'proof_sent',
@@ -182,7 +179,6 @@ class PaymentValidationTest extends TestCase
         $pendingCharge = Charge::create([
             'expense_id' => $expense->id,
             'expense_participant_id' => $epExtra->id,
-            'team_member_id' => null,
             'amount' => 25.00,
             'due_date' => $expense->due_date,
             'status' => 'pending',

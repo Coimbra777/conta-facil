@@ -21,16 +21,14 @@
 | `database/migrations/` | Schema versionado |
 | `tests/Feature/` | Fluxos API, público, segurança |
 
-Não há **Policies** Laravel separadas: autorização feita por queries em controller/service (`team` membership, `admin`, hash + manage).
+Não há **Policies** Laravel separadas: autorização por `ExpenseAuthorizer` (`created_by`) e, no fluxo público, por `manage_token` / header `X-Manage-Token`.
 
 ## Actions e services exemplares
 
 - `CreateExpenseAction` / `UpdateExpenseAction` / `DeleteExpenseAction` / `AddExpenseParticipantsAction` / `UpdateExpenseParticipantAction` / `DeleteExpenseParticipantAction` + `ExpenseService`.
 - `SubmitPaymentProofAction` + `PaymentProofService` — upload seguro, transação.
 - `ValidateChargeAction` / `RejectChargeAction` — transições de `Charge`.
-- `PublicExpenseCreatorService` — fluxo sem usuário autenticado (cobrança com `team_id` nulo).
-
-Rotas `teams/*` não estão expostas na API atual; modelos/tabelas permanecem para eventual reintrodução.
+- `PublicExpenseCreatorService` — fluxo sem usuário autenticado (`created_by` nulo; opcionalmente `owner_name` / `owner_phone`).
 
 ## Testes
 
@@ -45,9 +43,7 @@ Rotas `teams/*` não estão expostas na API atual; modelos/tabelas permanecem pa
 
 ### Participantes da cobrança (`expense_participants`)
 
-Quem aparece no link público e nas cobranças é **`ExpenseParticipant`** (snapshot por despesa). Cada charge expõe **`participant`**; dados legados só com `team_member_id` são convertidos para o mesmo formato JSON em **`App\Support\ChargeParticipantResolver`** (único ponto de fallback). **`PublicParticipantChargeResolver`** delega a esse resolver para o fluxo público.
-
-O módulo **`teams` / `team_members`** foi preservado para futuras features como times de futebol, grupos recorrentes ou agenda de contatos, mas o fluxo principal de cobrança usa **`expense_participants`**.
+Quem aparece no link público e nas cobranças é **`ExpenseParticipant`** (snapshot por despesa). Cada charge expõe **`participant`** serializado a partir de `charge.expenseParticipant`. O fluxo público usa **`PublicParticipantChargeResolver`** para casar nome + telefone à cobrança correta.
 
 ## Comandos úteis
 

@@ -182,9 +182,7 @@ function mapExpenseFromApi(e: Record<string, unknown>): Expense {
 function mapPublicExpenseFromApi(e: Record<string, unknown>): Expense {
     const rows =
         (e.participants as Record<string, unknown>[] | undefined) ?? [];
-    const per = Number(
-        e.amount_per_participant ?? e.amount_per_member ?? 0,
-    );
+    const per = Number(e.amount_per_participant ?? 0);
 
     const participants = rows.map((m, i) => ({
         id: String(m.charge_id ?? m.id ?? `pub-${i}-${String(m.name ?? "")}`),

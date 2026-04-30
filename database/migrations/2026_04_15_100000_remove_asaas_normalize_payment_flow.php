@@ -44,15 +44,6 @@ return new class extends Migration
             });
         }
 
-        if (Schema::hasTable('team_members') && Schema::hasColumn('team_members', 'asaas_customer_id')) {
-            Schema::table('team_members', function (Blueprint $table) {
-                $table->dropIndex(['asaas_customer_id']);
-            });
-            Schema::table('team_members', function (Blueprint $table) {
-                $table->dropColumn('asaas_customer_id');
-            });
-        }
-
         if (Schema::hasTable('charges')) {
             if (Schema::hasColumn('charges', 'asaas_charge_id')) {
                 Schema::table('charges', function (Blueprint $table) {
@@ -76,19 +67,19 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->string('asaas_customer_id')->nullable()->index();
-        });
+        if (Schema::hasTable('users')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->string('asaas_customer_id')->nullable()->index();
+            });
+        }
 
-        Schema::table('team_members', function (Blueprint $table) {
-            $table->string('asaas_customer_id')->nullable()->index();
-        });
-
-        Schema::table('charges', function (Blueprint $table) {
-            $table->string('asaas_charge_id')->nullable()->after('due_date');
-            $table->longText('pix_qr_code')->nullable()->after('status');
-            $table->text('pix_copy_paste')->nullable()->after('pix_qr_code');
-            $table->string('payment_link')->nullable()->after('pix_copy_paste');
-        });
+        if (Schema::hasTable('charges')) {
+            Schema::table('charges', function (Blueprint $table) {
+                $table->string('asaas_charge_id')->nullable()->after('due_date');
+                $table->longText('pix_qr_code')->nullable()->after('status');
+                $table->text('pix_copy_paste')->nullable()->after('pix_qr_code');
+                $table->string('payment_link')->nullable()->after('pix_copy_paste');
+            });
+        }
     }
 };

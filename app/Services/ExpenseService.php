@@ -7,7 +7,6 @@ use App\Models\Charge;
 use App\Models\Expense;
 use App\Models\ExpenseParticipant;
 use App\Models\User;
-use App\Support\ChargeParticipantResolver;
 use App\Support\ChargeStatusTransition;
 use App\Support\PhoneNormalizer;
 use Illuminate\Support\Facades\DB;
@@ -19,24 +18,22 @@ class ExpenseService
 
     /**
      * Cria cobrança sem participantes (charges). Valores por participante em addParticipantsToExpense.
-     * Fluxo principal: sem equipe (`team_id` nulo).
      */
     public function createExpenseForUser(User $creator, array $data): Expense
     {
         return DB::transaction(function () use ($creator, $data) {
             $expense = Expense::create([
-                'team_id' => null,
                 'created_by' => $creator->id,
                 'description' => $data['description'],
                 'total_amount' => $data['total_amount'],
-                'amount_per_member' => 0,
+                'amount_per_participant' => 0,
                 'due_date' => $data['due_date'],
                 'pix_key' => $data['pix_key'],
                 'pix_qr_code' => $data['pix_qr_code'] ?? null,
                 'status' => 'open',
             ]);
 
-            return $expense->fresh()->load(ChargeParticipantResolver::eagerLoadChargesWithSnapshots());
+            return $expense->fresh()->load(Charge::eagerChargesWithParticipant());
         });
     }
 
@@ -75,7 +72,7 @@ class ExpenseService
                 ]);
             }
 
-            return $expense->fresh()->load(ChargeParticipantResolver::eagerLoadChargesWithSnapshots());
+            return $expense->fresh()->load(Charge::eagerChargesWithParticipant());
         });
     }
 
@@ -121,8 +118,6 @@ class ExpenseService
                 ]);
 
                 $charge = Charge::create([
-                    'team_member_id' => null,
-                    'user_id' => null,
                     'expense_participant_id' => $participant->id,
                     'expense_id' => $expense->id,
                     'description' => $expense->description,
@@ -133,20 +128,20 @@ class ExpenseService
                 $newChargeIds[] = $charge->id;
             }
 
-            $fresh = $expense->fresh()->load(ChargeParticipantResolver::eagerLoadChargesWithSnapshots());
+            $fresh = $expense->fresh()->load(Charge::eagerChargesWithParticipant());
             $this->applyExplicitParticipantAmounts($fresh, $participants);
 
             return [
-                'expense' => $fresh->load(ChargeParticipantResolver::eagerLoadChargesWithSnapshots()),
+                'expense' => $fresh->load(Charge::eagerChargesWithParticipant()),
                 'newChargeIds' => $newChargeIds,
             ];
         });
 
         foreach ($result['newChargeIds'] as $chargeId) {
             $charge = Charge::query()
-                ->with(ChargeParticipantResolver::CHARGE_SNAPSHOT_RELATIONS)
+                ->with(Charge::EAGER_WITH_PARTICIPANT)
                 ->find($chargeId);
-            if ($charge && ChargeParticipantResolver::participantPayloadForChargeJson($charge) !== null) {
+            if ($charge && $charge->participantPayload() !== null) {
                 try {
                     $this->notificationService->notifyChargeRecipient(
                         $charge->fresh(),
@@ -171,7 +166,7 @@ class ExpenseService
      */
     public function applyExplicitParticipantAmounts(Expense $expense, array $participants): void
     {
-        $charges = $expense->charges()->with(ChargeParticipantResolver::CHARGE_SNAPSHOT_RELATIONS)->orderBy('id')->get();
+        $charges = $expense->charges()->with(Charge::EAGER_WITH_PARTICIPANT)->orderBy('id')->get();
         ChargeStatusTransition::assertAllPendingForRedistribution($charges);
 
         $amountByPhone = [];
@@ -198,7 +193,7 @@ class ExpenseService
         }
 
         foreach ($charges as $charge) {
-            $row = ChargeParticipantResolver::identitySnapshot($charge);
+            $row = $charge->participantIdentity();
             $participantPhone = PhoneNormalizer::digits((string) ($row['phone'] ?? ''));
             if ($participantPhone === '' || ! isset($amountByPhone[$participantPhone])) {
                 throw new \DomainException('Defina o valor para cada participante da cobrança.');
@@ -214,7 +209,7 @@ class ExpenseService
 
         $count = $charges->count();
         $avg = $count > 0 ? round($expectedSum / $count, 2) : 0;
-        $expense->update(['amount_per_member' => $avg]);
+        $expense->update(['amount_per_participant' => $avg]);
     }
 
     /**
@@ -269,7 +264,7 @@ class ExpenseService
             $charge->expenseParticipant?->update(['amount' => $amount]);
         }
 
-        $expense->update(['amount_per_member' => round($baseCents / 100, 2)]);
+        $expense->update(['amount_per_participant' => round($baseCents / 100, 2)]);
     }
 
     /**
@@ -340,10 +335,10 @@ class ExpenseService
 
                 $count = $expense->charges()->count();
                 $avg = $count > 0 ? round($total / $count, 2) : 0;
-                $expense->update(['amount_per_member' => $avg]);
+                $expense->update(['amount_per_participant' => $avg]);
             }
 
-            return $expense->fresh()->load(ChargeParticipantResolver::eagerLoadChargesWithSnapshots());
+            return $expense->fresh()->load(Charge::eagerChargesWithParticipant());
         });
     }
 
@@ -374,6 +369,6 @@ class ExpenseService
         $reloaded = Expense::query()->findOrFail($expense->id);
         $this->redistributeChargeAmounts($reloaded);
 
-        return $reloaded->fresh()->load(ChargeParticipantResolver::eagerLoadChargesWithSnapshots());
+        return $reloaded->fresh()->load(Charge::eagerChargesWithParticipant());
     }
 }

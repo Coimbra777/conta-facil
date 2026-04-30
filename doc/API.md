@@ -54,9 +54,9 @@ Body: `email`, `password`.
 
 ---
 
-## Equipes — fora do runtime da API v1
+## Modelagem de dados (API v1)
 
-As tabelas **`teams`** / **`team_members`** continuam no schema (migrations antigas + evolução futura possível). **Nenhuma rota `/api/v1/teams/*` está registrada** nesta versão — o produto usa apenas `Expense` + `ExpenseParticipant` + `Charge` para o fluxo principal.
+Tabelas ativas: **`users`**, **`expenses`**, **`expense_participants`**, **`charges`**, **`payment_proofs`**. Sem `teams` / `team_members` no schema atual.
 
 ---
 
@@ -102,7 +102,7 @@ Cria despesa “anônima” com participantes; retorno em envelope com `expense`
 
 ### `GET /api/v1/public/expenses/{hash}`
 
-Query opcional: `manage={manage_token}` — com token correto, `participants` lista cada cobrança (`charge_id`, `charge_status`, `amount`, nome, telefone). Sem token, `participants` traz apenas nome + status (visão mínima). Campo monetário médio: `amount_per_participant` (coluna interna `amount_per_member`).
+Query opcional: `manage={manage_token}` — com token correto, `participants` lista cada cobrança (`charge_id`, `charge_status`, `amount`, nome, telefone). Sem token, `participants` traz apenas nome + status (visão mínima). Campo monetário médio: **`amount_per_participant`** (coluna homônima em `expenses`).
 
 **404** — hash inexistente (envelope `NOT_FOUND`).
 

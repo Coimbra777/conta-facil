@@ -13,9 +13,13 @@ class Charge extends Model
 
     public const STATUSES = ['pending', 'proof_sent', 'validated', 'rejected'];
 
+    /** @var list<string> */
+    public const EAGER_WITH_PARTICIPANT = ['expenseParticipant'];
+
+    /** @var list<string> */
+    public const EAGER_WITH_PARTICIPANT_AND_PROOFS = ['expenseParticipant', 'paymentProofs'];
+
     protected $fillable = [
-        'user_id',
-        'team_member_id',
         'expense_participant_id',
         'expense_id',
         'description',
@@ -48,22 +52,9 @@ class Charge extends Model
         ];
     }
 
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
-    }
-
     public function expense(): BelongsTo
     {
         return $this->belongsTo(Expense::class);
-    }
-
-    /**
-     * Legado: dados antigos em {@see Charge::$team_member_id} antes do snapshot em expense_participants.
-     */
-    public function teamMember(): BelongsTo
-    {
-        return $this->belongsTo(TeamMember::class);
     }
 
     public function expenseParticipant(): BelongsTo
@@ -79,5 +70,76 @@ class Charge extends Model
     public function latestProof(): ?PaymentProof
     {
         return $this->paymentProofs()->latest()->first();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function participantPayload(): ?array
+    {
+        $this->loadMissing('expenseParticipant');
+        $p = $this->expenseParticipant;
+        if ($p === null) {
+            return null;
+        }
+
+        return [
+            'id' => $p->id,
+            'name' => $p->name,
+            'phone' => $p->phone,
+            'phone_normalized' => $p->phone_normalized,
+            'email' => $p->email,
+            'amount' => $p->amount,
+        ];
+    }
+
+    /**
+     * @return array{name: string, phone: string}
+     */
+    public function participantIdentity(): array
+    {
+        $this->loadMissing('expenseParticipant');
+        $p = $this->expenseParticipant;
+
+        return [
+            'name' => trim((string) ($p?->name ?? '')),
+            'phone' => (string) ($p?->phone ?? $p?->phone_normalized ?? ''),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function publicManageParticipantRow(): array
+    {
+        $row = $this->participantIdentity();
+
+        return [
+            'charge_id' => $this->id,
+            'charge_status' => $this->status,
+            'amount' => $this->amount,
+            'name' => $row['name'],
+            'phone' => $row['phone'],
+        ];
+    }
+
+    /**
+     * @return array<int|string, callable|string>
+     */
+    public static function eagerChargesWithParticipant(): array
+    {
+        return [
+            'charges' => fn ($q) => $q->with(self::EAGER_WITH_PARTICIPANT),
+        ];
+    }
+
+    /**
+     * @return array<int|string, callable|string>
+     */
+    public static function eagerChargesWithParticipantAndProofs(): array
+    {
+        return [
+            'charges' => fn ($q) => $q->with(self::EAGER_WITH_PARTICIPANT_AND_PROOFS),
+        ];
     }
 }

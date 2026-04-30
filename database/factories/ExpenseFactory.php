@@ -16,7 +16,6 @@ class ExpenseFactory extends Factory
     public function definition(): array
     {
         return [
-            'team_id' => null,
             'created_by' => User::factory(),
             'owner_name' => null,
             'owner_phone' => null,
@@ -24,7 +23,7 @@ class ExpenseFactory extends Factory
             'total_amount' => fake()->randomFloat(2, 10, 5000),
             'due_date' => fake()->dateTimeBetween('now', '+30 days')->format('Y-m-d'),
             'status' => 'open',
-            'amount_per_member' => null,
+            'amount_per_participant' => null,
             'pix_key' => null,
             'pix_qr_code' => null,
         ];

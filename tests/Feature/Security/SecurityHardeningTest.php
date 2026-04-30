@@ -20,11 +20,10 @@ class SecurityHardeningTest extends TestCase
         $admin = User::factory()->create();
 
         $expense = Expense::create([
-            'team_id' => null,
             'created_by' => $admin->id,
             'description' => 'Teste segurança',
             'total_amount' => 100.00,
-            'amount_per_member' => 100.00,
+            'amount_per_participant' => 100.00,
             'due_date' => now()->addDay()->format('Y-m-d'),
             'pix_key' => '11999999999',
             'status' => 'open',
@@ -45,8 +44,6 @@ class SecurityHardeningTest extends TestCase
         Charge::create([
             'expense_id' => $expense->id,
             'expense_participant_id' => $ep->id,
-            'team_member_id' => null,
-            'user_id' => $admin->id,
             'description' => $expense->description,
             'amount' => 100.00,
             'due_date' => $expense->due_date,
@@ -82,11 +79,10 @@ class SecurityHardeningTest extends TestCase
         $admin = User::factory()->create();
 
         $expense = Expense::create([
-            'team_id' => null,
             'created_by' => $admin->id,
             'description' => 'Rateio',
             'total_amount' => 100.00,
-            'amount_per_member' => 100.00,
+            'amount_per_participant' => 100.00,
             'due_date' => now()->addDay()->format('Y-m-d'),
             'pix_key' => '11999999999',
             'status' => 'open',
@@ -107,8 +103,6 @@ class SecurityHardeningTest extends TestCase
         Charge::create([
             'expense_id' => $expense->id,
             'expense_participant_id' => $ep->id,
-            'team_member_id' => null,
-            'user_id' => null,
             'description' => $expense->description,
             'amount' => 100.00,
             'due_date' => $expense->due_date,
@@ -129,11 +123,10 @@ class SecurityHardeningTest extends TestCase
         $admin = User::factory()->create();
 
         $expense = Expense::create([
-            'team_id' => null,
             'created_by' => $admin->id,
             'description' => 'X',
             'total_amount' => 10.00,
-            'amount_per_member' => 10.00,
+            'amount_per_participant' => 10.00,
             'due_date' => now()->addDay()->format('Y-m-d'),
             'pix_key' => 'pix',
             'status' => 'open',

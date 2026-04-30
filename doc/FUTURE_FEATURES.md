@@ -2,7 +2,7 @@
 
 Cada item: objetivo, valor, impacto no banco, API, telas, riscos de segurança, prioridade.
 
-**Nota de produto:** as tabelas **`teams` / `team_members`** permanecem no banco para evoluções futuras; **`doc/LEGACY.md`** descreve remoção planejada. Não há rotas REST `/teams` na API v1 atual. O fluxo de divisão Pix modela participantes por cobrança em **`expense_participants`** (snapshot independente por `Expense`).
+**Modelagem atual:** apenas `users`, `expenses`, `expense_participants`, `charges`, `payment_proofs` — participantes da cobrança são sempre snapshots por despesa (`expense_participants`).
 
 ---
 
@@ -13,7 +13,7 @@ Cada item: objetivo, valor, impacto no banco, API, telas, riscos de segurança, 
 | **Objetivo** | Enviar lembrete automático antes do vencimento ou para quem está `pending`. |
 | **Valor** | Reduz inadimplência e trabalho manual do organizador. |
 | **Banco** | Tabela `notifications` ou `reminder_jobs`; campos `last_reminder_at` em `charges` / `expenses`. |
-| **Endpoints** | `POST /expenses/{expense}/reminders` (exemplo; desenhar sem dependência de team). |
+| **Endpoints** | `POST /expenses/{expense}/reminders` (exemplo).
 | **Telas** | Toggle “lembrar participantes”, histórico de envios. |
 | **Riscos** | Spam, opt-in LGPD, segredo de API WhatsApp no backend apenas. |
 | **Prioridade** | Média |
@@ -36,7 +36,7 @@ Cada item: objetivo, valor, impacto no banco, API, telas, riscos de segurança, 
 |--|--|
 | **Objetivo** | Cada participante recebe link único com token opaco. |
 | **Valor** | Menos fricção que nome+telefone; menos ambiguidade. |
-| **Banco** | `team_members.invite_token` ou tabela `expense_invites`. |
+| **Banco** | `expense_participants.invite_token` ou tabela `expense_invites`. |
 | **Endpoints** | `GET /public/invite/{token}` resolve participante. |
 | **Telas** | Gerar links por participante na UI. |
 | **Riscos** | Token longo e secreto; expiração; não logar. |
@@ -61,9 +61,9 @@ Cada item: objetivo, valor, impacto no banco, API, telas, riscos de segurança, 
 | **Objetivo** | Totais por mês, taxa de conclusão, tempo médio até `validated`. |
 | **Valor** | Visão para power users. |
 | **Banco** | Queries agregadas; possível materialized view ou cache. |
-| **Endpoints** | `GET /teams/{team}/stats?month=` |
+| **Endpoints** | `GET /expenses/stats?month=` (exemplo agregado por usuário) |
 | **Telas** | Gráficos (já existe `chart.tsx` com Recharts). |
-| **Riscos** | Vazamento agregado entre equipes — checar escopo. |
+| **Riscos** | Agregações não devem vazar dados entre usuários — escopo por `created_by`. |
 | **Prioridade** | Baixa |
 
 ## Exportação CSV/PDF
@@ -108,7 +108,7 @@ Cada item: objetivo, valor, impacto no banco, API, telas, riscos de segurança, 
 |--|--|
 | **Objetivo** | Vários admins ou papel “financeiro”. |
 | **Valor** | Empresas. |
-| **Banco** | `team_members.role` expandido, permissões granulares. |
+| **Banco** | Modelo futuro (ex.: `expense_collaborators`) com papéis e permissões granulares. |
 | **Endpoints** | Policies centralizadas. |
 | **Telas** | Gestão de membros rica. |
 | **Riscos** | Erros de autorização — testes obrigatórios. |
@@ -168,7 +168,7 @@ Cada item: objetivo, valor, impacto no banco, API, telas, riscos de segurança, 
 |--|--|
 | **Objetivo** | Texto padrão (“Churras mensal”). |
 | **Valor** | Branding leve. |
-| **Banco** | `expense_templates` por team. |
+| **Banco** | `expense_templates` por usuário (`created_by`). |
 | **Endpoints** | CRUD simples. |
 | **Telas** | Picker na criação. |
 | **Riscos** | XSS em descrição — mesma regra atual. |

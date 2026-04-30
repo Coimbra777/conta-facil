@@ -83,7 +83,6 @@ class ExpenseTest extends TestCase
 
         $this->assertDatabaseHas('expenses', [
             'created_by' => $admin->id,
-            'team_id' => null,
             'total_amount' => '100.00',
             'status' => 'open',
             'pix_key' => '11999999999',
@@ -202,7 +201,6 @@ class ExpenseTest extends TestCase
         $response->assertStatus(201);
         $this->assertDatabaseHas('expenses', [
             'created_by' => $regularUser->id,
-            'team_id' => null,
         ]);
     }
 

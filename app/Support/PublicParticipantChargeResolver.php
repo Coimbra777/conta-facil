@@ -7,8 +7,6 @@ use App\Models\Expense;
 
 /**
  * Resolve cobrança por nome + telefone no fluxo público.
- *
- * {@see ChargeParticipantResolver} concentra o fallback legado por {@see \App\Models\TeamMember}.
  */
 class PublicParticipantChargeResolver
 {
@@ -24,8 +22,8 @@ class PublicParticipantChargeResolver
             return null;
         }
 
-        foreach ($expense->charges()->with(ChargeParticipantResolver::CHARGE_SNAPSHOT_RELATIONS)->get() as $charge) {
-            $row = ChargeParticipantResolver::identitySnapshot($charge);
+        foreach ($expense->charges()->with(Charge::EAGER_WITH_PARTICIPANT)->get() as $charge) {
+            $row = $charge->participantIdentity();
             $storedName = trim((string) ($row['name'] ?? ''));
             if ($storedName === '') {
                 continue;

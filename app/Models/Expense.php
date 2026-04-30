@@ -13,13 +13,12 @@ class Expense extends Model
     use HasFactory;
 
     protected $fillable = [
-        'team_id',
         'created_by',
         'owner_name',
         'owner_phone',
         'description',
         'total_amount',
-        'amount_per_member',
+        'amount_per_participant',
         'due_date',
         'pix_key',
         'pix_qr_code',
@@ -52,7 +51,7 @@ class Expense extends Model
     {
         return [
             'total_amount' => 'decimal:2',
-            'amount_per_member' => 'decimal:2',
+            'amount_per_participant' => 'decimal:2',
             'due_date' => 'date',
         ];
     }
@@ -72,14 +71,6 @@ class Expense extends Model
         return $query->where('public_hash', $hash);
     }
 
-    /**
-     * Legado: despesa pode referenciar uma equipe (`team_id`); fluxo principal mantém null.
-     */
-    public function team(): BelongsTo
-    {
-        return $this->belongsTo(Team::class);
-    }
-
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
@@ -93,6 +84,11 @@ class Expense extends Model
     public function expenseParticipants(): HasMany
     {
         return $this->hasMany(ExpenseParticipant::class);
+    }
+
+    public function participants(): HasMany
+    {
+        return $this->expenseParticipants();
     }
 
     /**

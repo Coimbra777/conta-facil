@@ -3,7 +3,6 @@
 namespace App\Http\Resources;
 
 use App\Models\Charge;
-use App\Support\ChargeParticipantResolver;
 use App\Support\ManageTokenResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -29,7 +28,7 @@ class PublicExpenseResource extends JsonResource
             'public_hash' => $this->public_hash,
             'description' => $this->description,
             'total_amount' => $this->total_amount,
-            'amount_per_participant' => $this->amount_per_member,
+            'amount_per_participant' => $this->amount_per_participant,
             'due_date' => $this->due_date,
             'status' => $this->status,
             'is_closed' => $this->status === 'closed',
@@ -39,7 +38,7 @@ class PublicExpenseResource extends JsonResource
             'owner_phone' => $this->owner_phone,
             'can_manage' => true,
             'participants' => $this->whenLoaded('charges', fn () => $this->charges->map(function (Charge $charge) {
-                return ChargeParticipantResolver::publicManageParticipantRow($charge);
+                return $charge->publicManageParticipantRow();
             })),
         ];
     }
@@ -52,7 +51,7 @@ class PublicExpenseResource extends JsonResource
             'description' => $this->description,
             'total_amount' => $this->total_amount,
             'amount' => $this->total_amount,
-            'amount_per_participant' => $this->amount_per_member,
+            'amount_per_participant' => $this->amount_per_participant,
             'due_date' => $this->due_date,
             'status' => $this->status,
             'is_closed' => $this->status === 'closed',
@@ -60,7 +59,7 @@ class PublicExpenseResource extends JsonResource
             'pix_qr_code' => $this->pix_qr_code,
             'can_manage' => false,
             'participants' => $this->whenLoaded('charges', fn () => $this->charges->map(function (Charge $charge) {
-                $row = ChargeParticipantResolver::identitySnapshot($charge);
+                $row = $charge->participantIdentity();
 
                 return [
                     'name' => $row['name'],
