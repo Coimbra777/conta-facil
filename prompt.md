@@ -1,71 +1,70 @@
-Ajustar o header da página inicial (Landing) para simplificar a UX.
+Ajustar a Landing com a regra final de CTAs por estado de autenticação.
 
-Objetivo:
-Na página inicial, quando o usuário estiver autenticado (conta real), exibir apenas o botão "Sair" no header.
+Regras finais:
 
-Regras:
+HEADER:
 
 1. Usuário deslogado:
 
-- mostrar normalmente:
-    - botão "Entrar"
-    - botão "Criar conta"
-    - CTA "Ver demonstração"
+- mostrar "Entrar"
+- mostrar "Criar conta"
 
-2. Usuário logado (conta real):
+2. Usuário logado com conta real:
 
-- NÃO mostrar:
-    - botão "Entrar"
-    - botão "Criar conta"
-    - botão "Ver demonstração"
-- mostrar apenas:
-    - botão "Sair" no header
+- mostrar "Sair"
+- mostrar "Minhas cobranças"
 
-3. Usuário em modo demonstração:
+3. Usuário em modo demo:
 
-- comportamento já existente:
-    - ao acessar a landing, encerrar automaticamente a sessão demo
-    - após isso, tratar como visitante deslogado
+- ao acessar a landing, encerrar automaticamente a sessão demo;
+- depois tratar como visitante deslogado.
 
-4. Implementação:
+BODY / HERO:
+
+1. Usuário deslogado:
+
+- mostrar "Criar conta grátis"
+- mostrar "Entrar"
+- mostrar "Ver demonstração"
+
+2. Usuário logado com conta real:
+
+- mostrar "Ir para minhas cobranças"
+- mostrar "Criar nova cobrança"
+
+3. Nunca mostrar:
+
+- "Sair" no body/hero;
+- "Ver demonstração" para usuário logado.
+
+LOADING:
+
+- Durante carregamento, evitar flicker com botões incorretos.
 
 Arquivos prováveis:
 
 - frontend/src/pages/Landing.tsx
-- frontend/src/components/Header.tsx (ou equivalente)
-- frontend/src/lib/auth.tsx
+- frontend/src/lib/auth.test.tsx
+- outros componentes de CTA/header se existirem.
 
-Lógica sugerida:
+Testes esperados:
 
-- usar:
-    - user (estado autenticado)
-    - isDemoMode()
-    - isLoading
+- visitante deslogado:
+    - header mostra "Entrar" e "Criar conta";
+    - body mostra "Criar conta grátis", "Entrar" e "Ver demonstração";
+    - header não mostra "Ver demonstração".
 
-- condição para header:
+- usuário logado:
+    - header mostra "Sair" e "Minhas cobranças";
+    - body mostra "Ir para minhas cobranças" e "Criar nova cobrança";
+    - body não mostra "Sair";
+    - body não mostra "Ver demonstração";
+    - body não mostra "Entrar".
 
-if (isLoading) return null
-
-if (user && !isDemo) {
-mostrar botão "Sair"
-} else {
-mostrar "Entrar", "Criar conta" e CTA de demonstração
-}
-
-5. Garantir:
-
-- logout limpa auth e demo
-- não quebrar fluxo existente de demo
-- não quebrar testes atuais
-
-6. Testes:
-
-Adicionar/ajustar testes:
-
-- visitante vê login/registro/demo
-- usuário logado vê apenas botão "Sair"
-- usuário demo ao acessar landing vira visitante
-- header não mostra elementos errados durante loading
+- usuário demo:
+    - ao acessar landing, encerra demo automaticamente;
+    - volta ao estado deslogado;
+    - mostra CTAs de visitante.
 
 Executar:
 
@@ -74,6 +73,7 @@ Executar:
 
 Entrega:
 
-- lista de arquivos alterados
-- descrição do comportamento final
-- possíveis impactos no frontend
+- arquivos alterados;
+- comportamento final;
+- testes executados;
+- impactos no frontend.

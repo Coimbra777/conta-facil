@@ -88,6 +88,10 @@ function landingNav() {
     return within(screen.getByRole("navigation"));
 }
 
+function landingHero() {
+    return within(screen.getByRole("banner"));
+}
+
 describe("auth flow", () => {
     beforeEach(() => {
         localStorage.clear();
@@ -174,7 +178,7 @@ describe("auth flow", () => {
         expect(meSpy).not.toHaveBeenCalled();
     });
 
-    it("landing mostra login, cadastro e demo no header para visitante deslogado", async () => {
+    it("visitante deslogado mostra CTAs corretos no header e no hero", async () => {
         renderAuthApp("/");
 
         await waitFor(() => {
@@ -186,14 +190,26 @@ describe("auth flow", () => {
             landingNav().getByRole("link", { name: /criar conta/i }),
         ).toBeInTheDocument();
         expect(
-            landingNav().getByRole("link", { name: /ver demonstração/i }),
-        ).toBeInTheDocument();
+            landingNav().queryByRole("link", { name: /ver demonstração/i }),
+        ).not.toBeInTheDocument();
         expect(
             landingNav().queryByRole("button", { name: /^sair$/i }),
         ).not.toBeInTheDocument();
+        expect(
+            landingHero().getByRole("link", { name: /criar conta grátis/i }),
+        ).toBeInTheDocument();
+        expect(
+            landingHero().getByRole("link", { name: /^entrar$/i }),
+        ).toBeInTheDocument();
+        expect(
+            landingHero().getByRole("link", { name: /ver demonstração/i }),
+        ).toBeInTheDocument();
+        expect(
+            landingHero().queryByRole("button", { name: /^sair$/i }),
+        ).not.toBeInTheDocument();
     });
 
-    it("landing mostra apenas sair no header para usuário logado", async () => {
+    it("usuário logado mostra CTAs corretos no header e no hero", async () => {
         localStorage.setItem(AUTH_STORAGE_KEY, "persisted-token");
         vi.spyOn(api, "me").mockResolvedValue(realUser());
 
@@ -201,9 +217,12 @@ describe("auth flow", () => {
 
         await waitFor(() => {
             expect(
-                landingNav().getByRole("button", { name: /^sair$/i }),
+                landingNav().getByRole("link", { name: /minhas cobranças/i }),
             ).toBeInTheDocument();
         });
+        expect(
+            landingNav().getByRole("button", { name: /^sair$/i }),
+        ).toBeInTheDocument();
         expect(
             landingNav().queryByRole("link", { name: /^entrar$/i }),
         ).not.toBeInTheDocument();
@@ -211,11 +230,23 @@ describe("auth flow", () => {
             landingNav().queryByRole("link", { name: /criar conta/i }),
         ).not.toBeInTheDocument();
         expect(
-            landingNav().queryByRole("link", { name: /ver demonstração/i }),
+            landingHero().getByRole("link", { name: /ir para minhas cobranças/i }),
+        ).toBeInTheDocument();
+        expect(
+            landingHero().getByRole("link", { name: /criar nova cobrança/i }),
+        ).toBeInTheDocument();
+        expect(
+            landingHero().queryByRole("button", { name: /^sair$/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            landingHero().queryByRole("link", { name: /ver demonstração/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            landingHero().queryByRole("link", { name: /^entrar$/i }),
         ).not.toBeInTheDocument();
     });
 
-    it("landing não mostra ações erradas no header durante loading", async () => {
+    it("landing não mostra CTAs incorretos durante loading", async () => {
         localStorage.setItem(AUTH_STORAGE_KEY, "persisted-token");
 
         vi.spyOn(api, "me").mockImplementation(
@@ -231,10 +262,28 @@ describe("auth flow", () => {
             landingNav().queryByRole("link", { name: /criar conta/i }),
         ).not.toBeInTheDocument();
         expect(
-            landingNav().queryByRole("link", { name: /ver demonstração/i }),
+            landingNav().queryByRole("link", { name: /minhas cobranças/i }),
         ).not.toBeInTheDocument();
         expect(
             landingNav().queryByRole("button", { name: /^sair$/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            landingHero().queryByRole("link", { name: /criar conta grátis/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            landingHero().queryByRole("link", { name: /^entrar$/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            landingHero().queryByRole("link", { name: /ver demonstração/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            landingHero().queryByRole("link", { name: /ir para minhas cobranças/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            landingHero().queryByRole("link", { name: /criar nova cobrança/i }),
+        ).not.toBeInTheDocument();
+        expect(
+            landingHero().queryByRole("button", { name: /^sair$/i }),
         ).not.toBeInTheDocument();
     });
 
@@ -464,7 +513,7 @@ describe("auth flow", () => {
         expect(localStorage.getItem(DEMO_STORAGE_KEY)).toBeNull();
     });
 
-    it("acessar a home em modo demo encerra automaticamente a sessão demo", async () => {
+    it("usuário demo ao acessar a landing encerra a sessão e volta aos CTAs de visitante", async () => {
         localStorage.setItem(AUTH_STORAGE_KEY, "persisted-token");
         localStorage.setItem(DEMO_STORAGE_KEY, "1");
         vi.spyOn(api, "me").mockResolvedValue({
@@ -472,7 +521,9 @@ describe("auth flow", () => {
             name: "Visitante",
             email: "demo@contacerta.local",
         });
-        vi.spyOn(mockApi, "logout").mockResolvedValue(true);
+        const logoutSpy = vi
+            .spyOn(mockApi, "logout")
+            .mockResolvedValue(true);
 
         renderAuthApp("/");
 
@@ -480,11 +531,21 @@ describe("auth flow", () => {
             expect(localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
             expect(localStorage.getItem(DEMO_STORAGE_KEY)).toBeNull();
         });
+        expect(logoutSpy).toHaveBeenCalledTimes(1);
         expect(
             landingNav().getByRole("link", { name: /^entrar$/i }),
         ).toBeInTheDocument();
         expect(
-            landingNav().getByRole("link", { name: /ver demonstração/i }),
+            landingNav().getByRole("link", { name: /criar conta/i }),
+        ).toBeInTheDocument();
+        expect(
+            landingHero().getByRole("link", { name: /criar conta grátis/i }),
+        ).toBeInTheDocument();
+        expect(
+            landingHero().getByRole("link", { name: /^entrar$/i }),
+        ).toBeInTheDocument();
+        expect(
+            landingHero().getByRole("link", { name: /ver demonstração/i }),
         ).toBeInTheDocument();
     });
 });
