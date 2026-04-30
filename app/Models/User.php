@@ -57,6 +57,12 @@ class User extends Authenticatable
         return $this->hasMany(Charge::class);
     }
 
+    /** Cobranças criadas pelo usuário (fluxo principal sem equipe). */
+    public function expenses(): HasMany
+    {
+        return $this->hasMany(Expense::class, 'created_by');
+    }
+
     public function teams(): BelongsToMany
     {
         return $this->belongsToMany(Team::class, 'team_members')

@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\User;
+use App\Support\ExpenseAuthorizer;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -32,19 +33,13 @@ class ExpenseResource extends JsonResource
 
     private function resolveCanManage(?User $user): bool
     {
-        if (! $user || ! $this->team) {
+        if (! $user) {
             return false;
         }
 
-        if ($this->team->relationLoaded('members')) {
-            return $this->team->members->contains(
-                fn ($m) => (int) $m->user_id === (int) $user->id && $m->role === 'admin'
-            );
-        }
+        /** @var \App\Models\Expense $expense */
+        $expense = $this->resource;
 
-        return $this->team->members()
-            ->where('user_id', $user->id)
-            ->where('role', 'admin')
-            ->exists();
+        return ExpenseAuthorizer::canManage($user, $expense);
     }
 }

@@ -25,10 +25,12 @@ Não há **Policies** Laravel separadas: autorização feita por queries em cont
 
 ## Actions e services exemplares
 
-- `CreateExpenseAction` / `ExpenseService` — criação, atualização, divisão de valores.
+- `CreateExpenseAction` / `UpdateExpenseAction` / `DeleteExpenseAction` / `AddExpenseParticipantsAction` / `UpdateExpenseParticipantAction` / `DeleteExpenseParticipantAction` + `ExpenseService`.
 - `SubmitPaymentProofAction` + `PaymentProofService` — upload seguro, transação.
 - `ValidateChargeAction` / `RejectChargeAction` — transições de `Charge`.
-- `PublicExpenseCreatorService` — fluxo sem usuário autenticado.
+- `PublicExpenseCreatorService` — fluxo sem usuário autenticado (cobrança com `team_id` nulo).
+
+Rotas legadas `teams/*` (sem CRUD de despesa aninhado) permanecem para evolução futura.
 
 ## Testes
 
@@ -40,6 +42,12 @@ Não há **Policies** Laravel separadas: autorização feita por queries em cont
 - FKs com `cascadeOnDelete` / `nullOnDelete` conforme migration.
 - Índices únicos em tokens/hashes onde aplicável.
 - Tipos monetários: `decimal(10,2)`.
+
+### Participantes da cobrança (`expense_participants`)
+
+Quem aparece no link público e nas cobranças é **`ExpenseParticipant`** (snapshot por despesa). `Charge` expõe nos JSON **`participant`** e **`member`** com o mesmo payload quando há snapshot; dados antigos só em `team_member_id` continuam resolvidos via fallback em `ChargeResource` / `PublicExpenseResource` / `PublicParticipantChargeResolver`.
+
+O módulo **`teams` / `team_members`** foi preservado para futuras features como times de futebol, grupos recorrentes ou agenda de contatos, mas o fluxo principal de cobrança usa **`expense_participants`**.
 
 ## Comandos úteis
 

@@ -11,6 +11,7 @@ use App\Http\Requests\Api\V1\RejectChargeRequest;
 use App\Http\Resources\ChargeResource;
 use App\Http\Responses\ApiResponse;
 use App\Models\Charge;
+use App\Support\ExpenseAuthorizer;
 use App\Support\SafeDownloadFilename;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -26,7 +27,7 @@ class ChargeValidationController extends Controller
         $charge = $validateChargeAction->execute($charge, ChargeActionAudience::TEAM_ADMIN);
 
         return ApiResponse::success([
-            'charge' => (new ChargeResource($charge->load('teamMember')))->resolve(),
+            'charge' => (new ChargeResource($charge->load(['expenseParticipant', 'teamMember'])))->resolve(),
         ], 'Pagamento validado.');
     }
 
@@ -41,7 +42,7 @@ class ChargeValidationController extends Controller
         );
 
         return ApiResponse::success([
-            'charge' => (new ChargeResource($charge->load('teamMember')))->resolve(),
+            'charge' => (new ChargeResource($charge->load(['expenseParticipant', 'teamMember'])))->resolve(),
         ], 'Comprovante rejeitado.');
     }
 
@@ -72,8 +73,7 @@ class ChargeValidationController extends Controller
             throw new HttpApiException('Registro não encontrado.', 'NOT_FOUND', 404);
         }
 
-        $membership = $expense->team->members()->where('user_id', $user->id)->first();
-        if (! $membership || $membership->role !== 'admin') {
+        if (! ExpenseAuthorizer::canManage($user, $expense)) {
             throw new HttpApiException(
                 'Você não tem permissão para realizar esta ação.',
                 'FORBIDDEN',

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Charge;
 use App\Support\ManageTokenResolver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -36,17 +37,8 @@ class PublicExpenseResource extends JsonResource
             'owner_name' => $this->owner_name,
             'owner_phone' => $this->owner_phone,
             'can_manage' => true,
-            'members' => $this->whenLoaded('charges', fn () => $this->charges->map(function ($charge) {
-                $member = $charge->teamMember;
-
-                return [
-                    'id' => $member?->id,
-                    'name' => $member?->name,
-                    'phone' => $member?->phone,
-                    'charge_id' => $charge->id,
-                    'charge_status' => $charge->status,
-                    'amount' => $charge->amount,
-                ];
+            'members' => $this->whenLoaded('charges', fn () => $this->charges->map(function (Charge $charge) {
+                return self::memberRowFromCharge($charge);
             })),
         ];
     }
@@ -66,12 +58,57 @@ class PublicExpenseResource extends JsonResource
             'pix_key' => $this->pix_key,
             'pix_qr_code' => $this->pix_qr_code,
             'can_manage' => false,
-            'participants' => $this->whenLoaded('charges', fn () => $this->charges->map(function ($charge) {
+            'participants' => $this->whenLoaded('charges', fn () => $this->charges->map(function (Charge $charge) {
+                $row = self::participantSnapshotFromCharge($charge);
+
                 return [
-                    'name' => $charge->teamMember?->name,
+                    'name' => $row['name'],
                     'status' => $charge->status,
                 ];
             })),
+        ];
+    }
+
+    /**
+     * @return array{id: int|string|null, name: string|null, phone: string|null, charge_id: int|string, charge_status: mixed, amount: mixed}
+     */
+    private static function memberRowFromCharge(Charge $charge): array
+    {
+        $charge->loadMissing(['expenseParticipant', 'teamMember']);
+        $row = self::participantSnapshotFromCharge($charge);
+
+        return [
+            'id' => $row['id'],
+            'name' => $row['name'],
+            'phone' => $row['phone'],
+            'charge_id' => $charge->id,
+            'charge_status' => $charge->status,
+            'amount' => $charge->amount,
+        ];
+    }
+
+    /**
+     * @return array{id: int|string|null, name: string|null, phone: string|null}
+     */
+    private static function participantSnapshotFromCharge(Charge $charge): array
+    {
+        $charge->loadMissing(['expenseParticipant', 'teamMember']);
+        if ($charge->expenseParticipant) {
+            $p = $charge->expenseParticipant;
+
+            return [
+                'id' => $p->id,
+                'name' => $p->name,
+                'phone' => $p->phone,
+            ];
+        }
+
+        $m = $charge->teamMember;
+
+        return [
+            'id' => $m?->id,
+            'name' => $m?->name,
+            'phone' => $m?->phone,
         ];
     }
 }

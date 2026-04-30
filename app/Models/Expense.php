@@ -87,6 +87,11 @@ class Expense extends Model
         return $this->hasMany(Charge::class);
     }
 
+    public function expenseParticipants(): HasMany
+    {
+        return $this->hasMany(ExpenseParticipant::class);
+    }
+
     /**
      * Se todas as cobranças estiverem validadas, marca a despesa como encerrada (MVP).
      */

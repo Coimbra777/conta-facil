@@ -5,8 +5,9 @@ namespace App\Actions\Expense;
 use App\Exceptions\HttpApiException;
 use App\Models\Charge;
 use App\Models\Expense;
-use App\Models\TeamMember;
+use App\Models\ExpenseParticipant;
 use App\Services\ExpenseService;
+use App\Support\PhoneNormalizer;
 use Illuminate\Support\Facades\DB;
 
 class AddPublicExpenseParticipantsAction
@@ -27,15 +28,17 @@ class AddPublicExpenseParticipantsAction
         }
 
         $existingPhones = $expense->charges()
-            ->with('teamMember')
+            ->with(['expenseParticipant', 'teamMember'])
             ->get()
-            ->map(fn (Charge $c) => preg_replace('/\D+/', '', (string) ($c->teamMember?->phone ?? '')))
+            ->map(fn (Charge $c) => PhoneNormalizer::digits(
+                (string) ($c->expenseParticipant?->phone ?? $c->teamMember?->phone ?? '')
+            ))
             ->filter()
             ->all();
 
         foreach ($participants as $p) {
-            $digits = $p['phone'];
-            if (in_array($digits, $existingPhones, true)) {
+            $digits = PhoneNormalizer::digits((string) ($p['phone'] ?? ''));
+            if ($digits !== '' && in_array($digits, $existingPhones, true)) {
                 throw new HttpApiException(
                     'Participante com este telefone ja existe nesta despesa.',
                     'DUPLICATE_PARTICIPANT',
@@ -46,16 +49,22 @@ class AddPublicExpenseParticipantsAction
 
         return DB::transaction(function () use ($expense, $participants) {
             foreach ($participants as $p) {
-                $member = TeamMember::create([
-                    'team_id' => $expense->team_id,
-                    'user_id' => null,
-                    'name' => $p['name'],
+                $digits = PhoneNormalizer::digits((string) ($p['phone'] ?? ''));
+
+                $expenseParticipant = ExpenseParticipant::create([
+                    'expense_id' => $expense->id,
+                    'name' => trim((string) ($p['name'] ?? '')),
                     'phone' => $p['phone'],
-                    'role' => 'member',
+                    'phone_normalized' => $digits !== '' ? $digits : null,
+                    'email' => null,
+                    'amount' => 0,
+                    'metadata' => null,
                 ]);
 
                 Charge::create([
-                    'team_member_id' => $member->id,
+                    'team_member_id' => null,
+                    'user_id' => null,
+                    'expense_participant_id' => $expenseParticipant->id,
                     'expense_id' => $expense->id,
                     'description' => $expense->description,
                     'amount' => 0.0,
@@ -68,7 +77,7 @@ class AddPublicExpenseParticipantsAction
 
             $this->expenseService->redistributeChargeAmounts($expense);
 
-            return $expense->fresh()->load(['charges.teamMember']);
+            return $expense->fresh()->load(['charges.expenseParticipant', 'charges.teamMember']);
         });
     }
 }

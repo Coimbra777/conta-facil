@@ -3,22 +3,24 @@
 namespace App\Http\Requests\Api\V1;
 
 use App\Models\Expense;
+use App\Models\ExpenseParticipant;
 use App\Support\ExpenseAuthorizer;
 use Illuminate\Foundation\Http\FormRequest;
 
-class DestroyExpenseRequest extends FormRequest
+class DestroyExpenseParticipantRequest extends FormRequest
 {
     public function authorize(): bool
     {
         /** @var \App\Models\User|null $user */
         $user = $this->user();
-        if (! $user) {
-            return false;
-        }
-
         /** @var Expense|null $expense */
         $expense = $this->route('expense');
-        if (! $expense instanceof Expense) {
+        /** @var ExpenseParticipant|null $participant */
+        $participant = $this->route('participant');
+        if (! $user || ! $expense instanceof Expense || ! $participant instanceof ExpenseParticipant) {
+            return false;
+        }
+        if ((int) $participant->expense_id !== (int) $expense->id) {
             return false;
         }
 

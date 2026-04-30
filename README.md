@@ -2,6 +2,8 @@
 
 API **Laravel** (`/api/v1`) + SPA **React/Vite** em `frontend/`.
 
+**Domínio principal:** cobrança compartilhada via Pix — usuário autenticado gerencia `Expense` em `/api/v1/expenses` (sem dependência de equipe). Rotas `/api/v1/teams/*` permanecem como legado.
+
 ## Requisitos
 
 - **Docker** e **Docker Compose** (plugin `docker compose`)

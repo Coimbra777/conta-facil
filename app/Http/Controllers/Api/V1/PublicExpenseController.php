@@ -58,7 +58,7 @@ class PublicExpenseController extends Controller
     public function show(Request $request, string $hash): JsonResponse
     {
         $expense = Expense::where('public_hash', $hash)
-            ->with(['charges.teamMember', 'charges.paymentProofs'])
+            ->with(['charges.expenseParticipant', 'charges.teamMember', 'charges.paymentProofs'])
             ->firstOrFail();
 
         return ApiResponse::success([
@@ -98,7 +98,7 @@ class PublicExpenseController extends Controller
         }
 
         $expense->update(['status' => 'closed']);
-        $expense->load(['charges.teamMember', 'charges.paymentProofs']);
+        $expense->load(['charges.expenseParticipant', 'charges.teamMember', 'charges.paymentProofs']);
 
         return ApiResponse::success([
             'expense' => (new PublicExpenseResource($expense))->resolve(),
@@ -155,7 +155,7 @@ class PublicExpenseController extends Controller
             }
         });
 
-        $expense->refresh()->load(['charges.teamMember', 'charges.paymentProofs']);
+        $expense->refresh()->load(['charges.expenseParticipant', 'charges.teamMember', 'charges.paymentProofs']);
 
         return ApiResponse::success([
             'expense' => (new PublicExpenseResource($expense))->resolve(),
@@ -176,7 +176,7 @@ class PublicExpenseController extends Controller
 
         $expense = $action->execute($expense, $participants);
 
-        $expense->refresh()->load(['charges.teamMember', 'charges.paymentProofs']);
+        $expense->refresh()->load(['charges.expenseParticipant', 'charges.teamMember', 'charges.paymentProofs']);
 
         return ApiResponse::success([
             'expense' => (new PublicExpenseResource($expense))->resolve(),

@@ -6,7 +6,8 @@ use App\Models\Charge;
 use App\Models\Expense;
 
 /**
- * Nome (trim) e telefone (só dígitos) devem coincidir exatamente com o cadastro. Não altera dados.
+ * Nome (trim) e telefone (só dígitos) devem coincidir exatamente com o snapshot da cobrança
+ * ({@see \App\Models\ExpenseParticipant}), com fallback legado para {@see \App\Models\TeamMember}.
  */
 class PublicParticipantChargeResolver
 {
@@ -22,14 +23,21 @@ class PublicParticipantChargeResolver
             return null;
         }
 
-        foreach ($expense->charges()->with('teamMember')->get() as $charge) {
-            $member = $charge->teamMember;
-            if ($member === null) {
-                continue;
+        foreach ($expense->charges()->with(['expenseParticipant', 'teamMember'])->get() as $charge) {
+            $storedName = null;
+            $storedDigits = '';
+
+            if ($charge->expenseParticipant) {
+                $storedName = trim((string) $charge->expenseParticipant->name);
+                $storedDigits = PhoneNormalizer::digits((string) $charge->expenseParticipant->phone);
+            } elseif ($charge->teamMember) {
+                $storedName = trim((string) $charge->teamMember->name);
+                $storedDigits = PhoneNormalizer::digits((string) $charge->teamMember->phone);
             }
 
-            $storedDigits = preg_replace('/\D+/', '', (string) $member->phone) ?? '';
-            $storedName = trim((string) $member->name);
+            if ($storedName === null) {
+                continue;
+            }
 
             if ($storedDigits === $phoneDigits && $storedName === $nameTrim) {
                 return $charge;

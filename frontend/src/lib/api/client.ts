@@ -132,6 +132,20 @@ function guessPixKeyType(pixKey: string): PixKeyType {
     return "random";
 }
 
+/** Prefer snapshot `participant`; fallback legado `member`. */
+function chargeParticipantFields(c: Record<string, unknown>): {
+    name: string;
+    phone: string;
+} {
+    const participant = c.participant as Record<string, unknown> | undefined;
+    const member = c.member as Record<string, unknown> | undefined;
+    const src = participant ?? member ?? {};
+    return {
+        name: String(src.name ?? ""),
+        phone: String(src.phone ?? ""),
+    };
+}
+
 function mapExpenseFromApi(e: Record<string, unknown>): Expense {
     const charges = (e.charges as Record<string, unknown>[] | undefined) ?? [];
     return {
@@ -149,11 +163,11 @@ function mapExpenseFromApi(e: Record<string, unknown>): Expense {
             ? String(e.created_at)
             : new Date().toISOString(),
         participants: charges.map((c) => {
-            const member = c.member as Record<string, unknown> | undefined;
+            const { name, phone } = chargeParticipantFields(c);
             return {
                 id: String(c.id ?? ""),
-                name: String(member?.name ?? ""),
-                phone: String(member?.phone ?? ""),
+                name,
+                phone,
                 amount: Number(c.amount ?? 0),
                 status: c.status as ApiStatus,
                 rejectionReason: c.rejection_reason
@@ -440,38 +454,6 @@ async function v1Fetch<T>(
     return unwrapEnvelope<T>(json, res);
 }
 
-async function ensureTeamId(): Promise<string> {
-    const base = getRealBaseUrl();
-    const res = await fetch(`${base}/api/v1/teams`, {
-        headers: authHeaders(),
-    });
-    if (res.status === 401) onUnauthorized();
-    const json = (await readJson(res)) as Record<string, unknown>;
-    if (!res.ok)
-        throw new ApiClientError(
-            String(json.message ?? "Erro ao listar equipes."),
-            { status: res.status },
-        );
-    const teams = json.teams as { id: string | number }[] | undefined;
-    if (teams?.length) return String(teams[0].id);
-    const cr = await fetch(`${base}/api/v1/teams`, {
-        method: "POST",
-        headers: authHeaders(true),
-        body: JSON.stringify({ name: "Minha equipe" }),
-    });
-    const cj = (await readJson(cr)) as Record<string, unknown>;
-    if (!cr.ok) {
-        if (cr.status === 422 && cj.errors)
-            throwLaravelValidation(cj, cr.status);
-        throw new ApiClientError(
-            String(cj.message ?? "Erro ao criar equipe."),
-            { status: cr.status },
-        );
-    }
-    const team = cj.team as Record<string, unknown>;
-    return String(team.id);
-}
-
 export const api = {
     /** Modo apresentação: sem Bearer; dados só em mockStore. */
     enterDemo: async (): Promise<User> => {
@@ -508,10 +490,9 @@ export const api = {
 
     listExpenses: async (): Promise<Expense[]> => {
         if (useMockForProtected()) return mockApi.listExpenses();
-        const teamId = await ensureTeamId();
         const data = await v1Fetch<{ expenses: Record<string, unknown>[] }>(
             "GET",
-            `/teams/${teamId}/expenses`,
+            `/expenses`,
         );
         const list = data.expenses ?? [];
         return list.map((e) => mapExpenseFromApi(e));
@@ -546,7 +527,6 @@ export const api = {
         participants: Array<{ name: string; phone: string; amount: number }>;
     }): Promise<Expense> => {
         if (useMockForProtected()) return mockApi.createExpense(input);
-        const teamId = await ensureTeamId();
         const due =
             input.dueDate?.slice(0, 10) ??
             new Date().toISOString().slice(0, 10);
@@ -560,13 +540,13 @@ export const api = {
         };
         const created = await v1Fetch<{ expense: Record<string, unknown> }>(
             "POST",
-            `/teams/${teamId}/expenses`,
+            `/expenses`,
             payload,
         );
         const expId = String(created.expense.id);
         await v1Fetch<{ expense: Record<string, unknown> }>(
             "POST",
-            `/teams/${teamId}/expenses/${expId}/participants`,
+            `/expenses/${expId}/participants`,
             {
                 participants: input.participants.map((p) => ({
                     name: p.name,
@@ -577,7 +557,7 @@ export const api = {
         );
         const fresh = await v1Fetch<{ expense: Record<string, unknown> }>(
             "GET",
-            `/teams/${teamId}/expenses/${expId}`,
+            `/expenses/${expId}`,
         );
         return mapExpenseFromApi(fresh.expense);
     },
@@ -593,11 +573,11 @@ export const api = {
             `/charges/${chargeId}/validate`,
         );
         const c = data.charge;
-        const member = c.member as Record<string, unknown> | undefined;
+        const { name, phone } = chargeParticipantFields(c);
         return {
             id: String(c.id ?? ""),
-            name: String(member?.name ?? ""),
-            phone: String(member?.phone ?? ""),
+            name,
+            phone,
             amount: Number(c.amount ?? 0),
             status: c.status as ApiStatus,
         };
@@ -616,11 +596,11 @@ export const api = {
             { reason },
         );
         const c = data.charge;
-        const member = c.member as Record<string, unknown> | undefined;
+        const { name, phone } = chargeParticipantFields(c);
         return {
             id: String(c.id ?? ""),
-            name: String(member?.name ?? ""),
-            phone: String(member?.phone ?? ""),
+            name,
+            phone,
             amount: Number(c.amount ?? 0),
             status: c.status as ApiStatus,
             rejectionReason: c.rejection_reason
@@ -752,10 +732,9 @@ export const api = {
             await mockApi.deleteExpense(expenseId);
             return;
         }
-        const teamId = await ensureTeamId();
         await v1Fetch<unknown>(
             "DELETE",
-            `/teams/${teamId}/expenses/${expenseId}`,
+            `/expenses/${expenseId}`,
         );
     },
 };

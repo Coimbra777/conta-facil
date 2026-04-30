@@ -4,10 +4,8 @@ namespace App\Services;
 
 use App\Models\Charge;
 use App\Models\Expense;
-use App\Models\Team;
-use App\Models\TeamMember;
+use App\Models\ExpenseParticipant;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class PublicExpenseCreatorService
 {
@@ -19,15 +17,10 @@ class PublicExpenseCreatorService
     public function create(array $data): Expense
     {
         return DB::transaction(function () use ($data) {
-            $team = Team::create([
-                'name' => 'Grupo: '.Str::limit($data['description'], 60),
-                'owner_id' => null,
-            ]);
-
             $totalAmount = (float) $data['amount'];
 
             $expense = Expense::create([
-                'team_id' => $team->id,
+                'team_id' => null,
                 'created_by' => null,
                 'owner_name' => $data['owner_name'],
                 'owner_phone' => $data['owner_phone'],
@@ -41,16 +34,22 @@ class PublicExpenseCreatorService
             ]);
 
             foreach ($data['participants'] as $participant) {
-                $member = TeamMember::create([
-                    'team_id' => $team->id,
-                    'user_id' => null,
-                    'name' => $participant['name'],
+                $digits = preg_replace('/\D+/', '', (string) ($participant['phone'] ?? '')) ?? '';
+
+                $expenseParticipant = ExpenseParticipant::create([
+                    'expense_id' => $expense->id,
+                    'name' => trim((string) ($participant['name'] ?? '')),
                     'phone' => $participant['phone'],
-                    'role' => 'member',
+                    'phone_normalized' => $digits !== '' ? $digits : null,
+                    'email' => null,
+                    'amount' => 0,
+                    'metadata' => null,
                 ]);
 
                 Charge::create([
-                    'team_member_id' => $member->id,
+                    'team_member_id' => null,
+                    'user_id' => null,
+                    'expense_participant_id' => $expenseParticipant->id,
                     'expense_id' => $expense->id,
                     'description' => $data['description'],
                     'amount' => 0.0,
@@ -61,7 +60,7 @@ class PublicExpenseCreatorService
 
             $this->expenseService->redistributeChargeAmounts($expense);
 
-            return $expense->load('charges.teamMember');
+            return $expense->load(['charges.expenseParticipant', 'charges.teamMember']);
         });
     }
 }

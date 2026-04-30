@@ -2,6 +2,8 @@
 
 Cada item: objetivo, valor, impacto no banco, API, telas, riscos de segurança, prioridade.
 
+**Nota de produto:** o módulo `teams` / `team_members` foi preservado para evoluções como **times de futebol**, **grupos recorrentes** ou **agenda de contatos**. O fluxo atual de divisão Pix modela participantes por cobrança em **`expense_participants`** (snapshot independente por `Expense`).
+
 ---
 
 ## Lembretes por WhatsApp

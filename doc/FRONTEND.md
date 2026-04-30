@@ -30,6 +30,7 @@
 
 ## API client
 
+- Cobranças autenticadas: `GET/POST /expenses`, `POST /expenses/{id}/participants`, `GET /expenses/{id}`, `DELETE /expenses/{id}` — sem `ensureTeamId` nem `/teams/.../expenses`.
 - `getToken` / `setToken` — `localStorage` chave `contacerta:auth:v1`.
 - Rotas autenticadas: `v1Fetch` com Bearer.
 - Rotas públicas sensíveis: **`publicV1Fetch`** para `validate-participant` (sem Bearer); `getPublicExpense` / `submitProof` usam `fetch` sem header de auth.

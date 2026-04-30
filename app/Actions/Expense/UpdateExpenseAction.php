@@ -3,15 +3,14 @@
 namespace App\Actions\Expense;
 
 use App\Models\Expense;
-use App\Models\User;
 use App\Services\ExpenseService;
 
-class CreateExpenseAction
+class UpdateExpenseAction
 {
     public function __construct(private ExpenseService $expenseService) {}
 
-    public function execute(User $creator, array $data): Expense
+    public function execute(Expense $expense, array $data): Expense
     {
-        return $this->expenseService->createExpenseForUser($creator, $data);
+        return $this->expenseService->updateExpense($expense, $data);
     }
 }

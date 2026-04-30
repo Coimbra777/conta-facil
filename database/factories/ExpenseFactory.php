@@ -3,7 +3,6 @@
 namespace Database\Factories;
 
 use App\Models\Expense;
-use App\Models\Team;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -17,7 +16,7 @@ class ExpenseFactory extends Factory
     public function definition(): array
     {
         return [
-            'team_id' => Team::factory(),
+            'team_id' => null,
             'created_by' => User::factory(),
             'owner_name' => null,
             'owner_phone' => null,

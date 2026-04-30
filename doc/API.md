@@ -54,7 +54,9 @@ Body: `email`, `password`.
 
 ---
 
-## Equipes (Bearer)
+## Equipes (Bearer) — legado
+
+Rotas mantidas para compatibilidade / evolução futura; **o fluxo principal de cobrança não depende mais de equipe**.
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
@@ -67,17 +69,20 @@ Body: `email`, `password`.
 
 ---
 
-## Despesas autenticadas (Bearer)
+## Cobranças — usuário autenticado (Bearer)
+
+Dono da cobrança: `expenses.created_by` = usuário logado. Participantes: `expense_participants` + `charges`.
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| POST | `/teams/{team}/expenses` | Cria despesa |
-| GET | `/teams/{team}/expenses` | Lista |
-| GET | `/teams/{team}/expenses/{expense}` | Detalhe com cobranças |
-| PATCH | `/teams/{team}/expenses/{expense}` | Atualiza |
-| POST | `/teams/{team}/expenses/{expense}/participants` | Adiciona participantes |
-| GET | `/expenses/{expense}` | Atalho por ID (membro da equipe) |
-| GET | `/expenses/{expense}/members` | Lista cobranças (admin) |
+| GET | `/expenses` | Lista cobranças do usuário |
+| POST | `/expenses` | Cria cobrança (sem equipe) |
+| GET | `/expenses/{expense}` | Detalhe com `charges` |
+| PATCH | `/expenses/{expense}` | Atualiza |
+| DELETE | `/expenses/{expense}` | Exclui (se todas as charges `pending`) |
+| POST | `/expenses/{expense}/participants` | Adiciona participantes e valores |
+| PATCH | `/expenses/{expense}/participants/{participant}` | Atualiza snapshot do participante |
+| DELETE | `/expenses/{expense}/participants/{participant}` | Remove participante (recalcula divisão) |
 
 ---
 

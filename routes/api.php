@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\ChargeValidationController;
 use App\Http\Controllers\Api\V1\ExpenseController;
+use App\Http\Controllers\Api\V1\ExpenseParticipantController;
 use App\Http\Controllers\Api\V1\PublicExpenseController;
 use App\Http\Controllers\Api\V1\TeamController;
 use App\Http\Controllers\Api\V1\TeamMemberController;
@@ -46,13 +47,20 @@ Route::prefix('v1')->group(function () {
     });
 
     Route::middleware('auth:sanctum')->group(function () {
-        Route::get('/expenses/{expense}', [ExpenseController::class, 'showDirect']);
-        Route::get('/expenses/{expense}/members', [ExpenseController::class, 'members']);
+        Route::get('/expenses', [ExpenseController::class, 'index']);
+        Route::post('/expenses', [ExpenseController::class, 'store']);
+        Route::get('/expenses/{expense}', [ExpenseController::class, 'show']);
+        Route::patch('/expenses/{expense}', [ExpenseController::class, 'update']);
+        Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy']);
+        Route::post('/expenses/{expense}/participants', [ExpenseController::class, 'addParticipants']);
+        Route::patch('/expenses/{expense}/participants/{participant}', [ExpenseParticipantController::class, 'update']);
+        Route::delete('/expenses/{expense}/participants/{participant}', [ExpenseParticipantController::class, 'destroy']);
 
         Route::patch('/charges/{charge}/validate', [ChargeValidationController::class, 'validateCharge']);
         Route::patch('/charges/{charge}/reject', [ChargeValidationController::class, 'reject']);
         Route::get('/charges/{charge}/proof', [ChargeValidationController::class, 'downloadProof']);
 
+        /** @deprecated Legado: times / membros (fora do fluxo principal de cobrança). */
         Route::prefix('teams')->group(function () {
             Route::post('/', [TeamController::class, 'store']);
             Route::get('/', [TeamController::class, 'index']);
@@ -61,13 +69,6 @@ Route::prefix('v1')->group(function () {
 
             Route::post('/{team}/members', [TeamMemberController::class, 'store']);
             Route::delete('/{team}/members/{member}', [TeamMemberController::class, 'destroy']);
-
-            Route::post('/{team}/expenses', [ExpenseController::class, 'store']);
-            Route::get('/{team}/expenses', [ExpenseController::class, 'index']);
-            Route::get('/{team}/expenses/{expense}', [ExpenseController::class, 'show']);
-            Route::patch('/{team}/expenses/{expense}', [ExpenseController::class, 'update']);
-            Route::delete('/{team}/expenses/{expense}', [ExpenseController::class, 'destroy']);
-            Route::post('/{team}/expenses/{expense}/participants', [ExpenseController::class, 'addParticipants']);
         });
     });
 

@@ -2,64 +2,35 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Actions\Expense\AddParticipantsToExpenseAction;
+use App\Actions\Expense\AddExpenseParticipantsAction;
 use App\Actions\Expense\CreateExpenseAction;
-use App\Exceptions\HttpApiException;
+use App\Actions\Expense\DeleteExpenseAction;
+use App\Actions\Expense\UpdateExpenseAction;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Api\V1\AddTeamExpenseParticipantsRequest;
+use App\Http\Requests\Api\V1\AddExpenseParticipantsRequest;
 use App\Http\Requests\Api\V1\DestroyExpenseRequest;
+use App\Http\Requests\Api\V1\ShowExpenseRequest;
 use App\Http\Requests\Api\V1\StoreExpenseRequest;
 use App\Http\Requests\Api\V1\UpdateExpenseRequest;
-use App\Http\Resources\ChargeResource;
 use App\Http\Resources\ExpenseResource;
 use App\Http\Responses\ApiResponse;
 use App\Models\Expense;
-use App\Models\Team;
-use App\Services\ExpenseService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 
 class ExpenseController extends Controller
 {
-    public function store(StoreExpenseRequest $request, Team $team, CreateExpenseAction $createExpenseAction): JsonResponse
+    public function index(): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        $membership = $team->members()->where('user_id', $user->id)->first();
-        if (! $membership || $membership->role !== 'admin') {
-            throw new HttpApiException(
-                'Você não tem permissão para realizar esta ação.',
-                'FORBIDDEN',
-                403,
-            );
-        }
-
-        $expense = $createExpenseAction->execute($team, $user, $request->validated());
-
-        return ApiResponse::success([
-            'expense' => (new ExpenseResource($expense))->resolve(),
-        ], 'Despesa criada com sucesso.', 201);
-    }
-
-    public function index(Team $team): JsonResponse
-    {
-        /** @var \App\Models\User $user */
-        $user = Auth::user();
-
-        if (! $team->members()->where('user_id', $user->id)->exists()) {
-            throw new HttpApiException(
-                'Você não tem permissão para realizar esta ação.',
-                'FORBIDDEN',
-                403,
-            );
-        }
-
-        $expenses = $team->expenses()
+        $expenses = Expense::query()
+            ->where('created_by', $user->id)
             ->with([
+                'charges.expenseParticipant',
                 'charges.teamMember',
                 'charges.paymentProofs',
-                'team.members',
             ])
             ->latest()
             ->get();
@@ -69,24 +40,25 @@ class ExpenseController extends Controller
         ], 'Despesas carregadas com sucesso.');
     }
 
-    public function show(Team $team, Expense $expense): JsonResponse
+    public function store(StoreExpenseRequest $request, CreateExpenseAction $createExpenseAction): JsonResponse
     {
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        if (! $team->members()->where('user_id', $user->id)->exists()) {
-            throw new HttpApiException(
-                'Você não tem permissão para realizar esta ação.',
-                'FORBIDDEN',
-                403,
-            );
-        }
+        $expense = $createExpenseAction->execute($user, $request->validated());
 
-        if ($expense->team_id !== $team->id) {
-            throw new HttpApiException('Registro não encontrado.', 'NOT_FOUND', 404);
-        }
+        return ApiResponse::success([
+            'expense' => (new ExpenseResource($expense))->resolve(),
+        ], 'Despesa criada com sucesso.', 201);
+    }
 
-        $expense->load('charges.teamMember', 'charges.paymentProofs');
+    public function show(ShowExpenseRequest $request, Expense $expense): JsonResponse
+    {
+        $expense->load([
+            'charges.expenseParticipant',
+            'charges.teamMember',
+            'charges.paymentProofs',
+        ]);
 
         return ApiResponse::success([
             'expense' => (new ExpenseResource($expense))->resolve(),
@@ -95,11 +67,10 @@ class ExpenseController extends Controller
 
     public function update(
         UpdateExpenseRequest $request,
-        Team $team,
         Expense $expense,
-        ExpenseService $expenseService,
+        UpdateExpenseAction $updateExpenseAction,
     ): JsonResponse {
-        $expense = $expenseService->updateExpense($expense, $request->validated());
+        $expense = $updateExpenseAction->execute($expense, $request->validated());
 
         return ApiResponse::success([
             'expense' => (new ExpenseResource($expense))->resolve(),
@@ -108,66 +79,23 @@ class ExpenseController extends Controller
 
     public function destroy(
         DestroyExpenseRequest $request,
-        Team $team,
         Expense $expense,
-        ExpenseService $expenseService,
+        DeleteExpenseAction $deleteExpenseAction,
     ): JsonResponse {
-        $expenseService->deleteExpenseIfAllowed($expense);
+        $deleteExpenseAction->execute($expense);
 
         return ApiResponse::success(null, 'Cobrança excluída.');
     }
 
     public function addParticipants(
-        AddTeamExpenseParticipantsRequest $request,
-        Team $team,
+        AddExpenseParticipantsRequest $request,
         Expense $expense,
-        AddParticipantsToExpenseAction $action,
+        AddExpenseParticipantsAction $action,
     ): JsonResponse {
-        $expense = $action->execute($team, $expense, $request->input('participants', []));
+        $expense = $action->execute($expense, $request->input('participants', []));
 
         return ApiResponse::success([
             'expense' => (new ExpenseResource($expense))->resolve(),
         ], 'Participantes atualizados.');
-    }
-
-    public function showDirect(Expense $expense): JsonResponse
-    {
-        /** @var \App\Models\User $user */
-        $user = Auth::user();
-
-        if (! $expense->team->members()->where('user_id', $user->id)->exists()) {
-            throw new HttpApiException(
-                'Você não tem permissão para realizar esta ação.',
-                'FORBIDDEN',
-                403,
-            );
-        }
-
-        $expense->load('charges.teamMember', 'charges.paymentProofs');
-
-        return ApiResponse::success([
-            'expense' => (new ExpenseResource($expense))->resolve(),
-        ]);
-    }
-
-    public function members(Expense $expense): JsonResponse
-    {
-        /** @var \App\Models\User $user */
-        $user = Auth::user();
-
-        $membership = $expense->team->members()->where('user_id', $user->id)->first();
-        if (! $membership || $membership->role !== 'admin') {
-            throw new HttpApiException(
-                'Você não tem permissão para realizar esta ação.',
-                'FORBIDDEN',
-                403,
-            );
-        }
-
-        $expense->load('charges.teamMember', 'charges.paymentProofs');
-
-        return ApiResponse::success([
-            'charges' => ChargeResource::collection($expense->charges)->resolve(),
-        ]);
     }
 }

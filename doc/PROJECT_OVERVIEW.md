@@ -12,7 +12,7 @@
 ## Principais fluxos
 
 1. **Registro/login** (API Sanctum) → equipe padrão ou equipe criada.
-2. **Criação de despesa** (time autenticado ou fluxo público sem conta) → participantes → cobranças (`charges`) com valores.
+2. **Criação de cobrança** (usuário logado: `POST /expenses` + participantes; ou fluxo público sem conta) → `ExpenseParticipant` + `charges`.
 3. **Link público** `/p/{public_hash}` → participante informa nome/telefone → API confere participante na despesa.
 4. **Pagamento** fora do sistema (Pix) → upload de comprovante.
 5. **Validação/rejeição** (painel autenticado ou rotas públicas com `manage_token`) → transição de status.
@@ -23,11 +23,14 @@
 | Entidade | Papel |
 |----------|--------|
 | `User` | Organizador autenticado |
-| `Team` | Grupo; membros com papel `admin` ou não |
-| `TeamMember` | Participante cadastral (nome, telefone, vínculo opcional com `User`) |
+| `Team` | Workspace/grupo interno ligado à despesa; rotas `/teams/...` mantidas |
+| `TeamMember` | Cadastro legado/futuro no time (não é mais a fonte da verdade do participante na cobrança) |
 | `Expense` | Cobrança/despesa; `public_hash`, `manage_token`, Pix, total, vencimento, status |
-| `Charge` | Parte de um participante na despesa; valor, status, `rejection_reason` |
+| `ExpenseParticipant` | Snapshot do participante **nesta** cobrança (nome, telefone, valor); histórico preservado |
+| `Charge` | Parte devida por um participante; liga-se a `expense_participant_id` (preferencial) ou legado `team_member_id` |
 | `PaymentProof` | Arquivo de comprovante ligado à cobrança |
+
+O módulo `teams` / `team_members` foi preservado para futuras features como times de futebol, grupos recorrentes ou agenda de contatos, mas o fluxo principal de cobrança usa **`expense_participants`**.
 
 ## Status da cobrança (`Charge`)
 

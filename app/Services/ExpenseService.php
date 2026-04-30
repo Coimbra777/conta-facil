@@ -5,8 +5,7 @@ namespace App\Services;
 use App\Exceptions\HttpApiException;
 use App\Models\Charge;
 use App\Models\Expense;
-use App\Models\Team;
-use App\Models\TeamMember;
+use App\Models\ExpenseParticipant;
 use App\Models\User;
 use App\Support\ChargeStatusTransition;
 use App\Support\PhoneNormalizer;
@@ -18,18 +17,14 @@ class ExpenseService
     public function __construct(private NotificationService $notificationService) {}
 
     /**
-     * Cria a despesa sem cobranças (charges). Os valores são definidos em addParticipantsToExpense,
-     * permitindo que a lista de participantes seja só quem divide o total — não todo o roster da equipe.
+     * Cria cobrança sem participantes (charges). Valores por participante em addParticipantsToExpense.
+     * Fluxo principal: sem equipe (`team_id` nulo).
      */
-    public function createExpenseAndSplit(Team $team, User $creator, array $data): Expense
+    public function createExpenseForUser(User $creator, array $data): Expense
     {
-        if ($team->members()->doesntExist()) {
-            throw new \DomainException('Team has no members.');
-        }
-
-        return DB::transaction(function () use ($team, $creator, $data) {
+        return DB::transaction(function () use ($creator, $data) {
             $expense = Expense::create([
-                'team_id' => $team->id,
+                'team_id' => null,
                 'created_by' => $creator->id,
                 'description' => $data['description'],
                 'total_amount' => $data['total_amount'],
@@ -40,7 +35,7 @@ class ExpenseService
                 'status' => 'open',
             ]);
 
-            return $expense->fresh()->load('charges.teamMember');
+            return $expense->fresh()->load(['charges.expenseParticipant', 'charges.teamMember']);
         });
     }
 
@@ -79,21 +74,17 @@ class ExpenseService
                 ]);
             }
 
-            return $expense->fresh()->load('charges.teamMember');
+            return $expense->fresh()->load(['charges.expenseParticipant', 'charges.teamMember']);
         });
     }
 
     /**
      * @param  list<array{name: string, phone: string}>  $participants  phones apenas digitos
      */
-    public function addParticipantsToExpense(Team $team, Expense $expense, array $participants): Expense
+    public function addParticipantsToExpense(Expense $expense, array $participants): Expense
     {
         if ($expense->status === 'closed') {
             throw new \DomainException('Esta despesa foi finalizada e nao aceita mais alteracoes.');
-        }
-
-        if ($expense->team_id !== $team->id) {
-            throw new \DomainException('Despesa nao pertence a esta equipe.');
         }
 
         if ($expense->charges()->where('status', '!=', 'pending')->exists()) {
@@ -102,7 +93,7 @@ class ExpenseService
             );
         }
 
-        $result = DB::transaction(function () use ($team, $expense, $participants) {
+        $result = DB::transaction(function () use ($expense, $participants) {
             $newChargeIds = [];
 
             foreach ($participants as $p) {
@@ -112,26 +103,26 @@ class ExpenseService
                     continue;
                 }
 
-                $member = TeamMember::where('team_id', $team->id)
-                    ->get()
-                    ->first(fn (TeamMember $m) => PhoneNormalizer::digits((string) $m->phone) === $phone);
-
-                if (! $member) {
-                    $member = TeamMember::create([
-                        'team_id' => $team->id,
-                        'name' => $name,
-                        'phone' => $phone,
-                        'role' => 'member',
-                    ]);
-                }
-
-                if ($expense->charges()->where('team_member_id', $member->id)->exists()) {
+                if ($expense->charges()->whereHas('expenseParticipant', function ($q) use ($phone): void {
+                    $q->where('phone_normalized', $phone);
+                })->exists()) {
                     continue;
                 }
 
+                $participant = ExpenseParticipant::create([
+                    'expense_id' => $expense->id,
+                    'name' => $name,
+                    'phone' => $phone,
+                    'phone_normalized' => $phone,
+                    'email' => null,
+                    'amount' => 0,
+                    'metadata' => null,
+                ]);
+
                 $charge = Charge::create([
-                    'team_member_id' => $member->id,
-                    'user_id' => $member->user_id,
+                    'team_member_id' => null,
+                    'user_id' => null,
+                    'expense_participant_id' => $participant->id,
                     'expense_id' => $expense->id,
                     'description' => $expense->description,
                     'amount' => 0.0,
@@ -141,23 +132,24 @@ class ExpenseService
                 $newChargeIds[] = $charge->id;
             }
 
-            $fresh = $expense->fresh()->load('charges.teamMember');
+            $fresh = $expense->fresh()->load(['charges.expenseParticipant', 'charges.teamMember']);
             $this->applyExplicitParticipantAmounts($fresh, $participants);
 
             return [
-                'expense' => $fresh->load('charges.teamMember'),
+                'expense' => $fresh->load(['charges.expenseParticipant', 'charges.teamMember']),
                 'newChargeIds' => $newChargeIds,
             ];
         });
 
         foreach ($result['newChargeIds'] as $chargeId) {
-            $charge = Charge::query()->with('teamMember')->find($chargeId);
-            if ($charge && $charge->teamMember) {
+            $charge = Charge::query()
+                ->with(['expenseParticipant', 'teamMember'])
+                ->find($chargeId);
+            if ($charge && ($charge->expenseParticipant || $charge->teamMember)) {
                 try {
-                    $this->notificationService->sendChargeNotification(
-                        $charge->teamMember,
+                    $this->notificationService->notifyChargeRecipient(
                         $charge->fresh(),
-                        $result['expense']->fresh()
+                        $result['expense']->fresh(),
                     );
                 } catch (\Throwable $e) {
                     Log::warning('Failed to notify new charge', [
@@ -178,7 +170,7 @@ class ExpenseService
      */
     public function applyExplicitParticipantAmounts(Expense $expense, array $participants): void
     {
-        $charges = $expense->charges()->with('teamMember')->orderBy('id')->get();
+        $charges = $expense->charges()->with(['expenseParticipant', 'teamMember'])->orderBy('id')->get();
         ChargeStatusTransition::assertAllPendingForRedistribution($charges);
 
         $amountByPhone = [];
@@ -205,15 +197,19 @@ class ExpenseService
         }
 
         foreach ($charges as $charge) {
-            $memberPhone = PhoneNormalizer::digits((string) $charge->teamMember->phone);
-            if (! isset($amountByPhone[$memberPhone])) {
+            $participantPhone = PhoneNormalizer::digits(
+                (string) ($charge->expenseParticipant?->phone ?? $charge->teamMember?->phone ?? '')
+            );
+            if ($participantPhone === '' || ! isset($amountByPhone[$participantPhone])) {
                 throw new \DomainException('Defina o valor para cada participante da cobrança.');
             }
+            $amt = $amountByPhone[$participantPhone];
             $charge->update([
-                'amount' => $amountByPhone[$memberPhone],
+                'amount' => $amt,
                 'description' => $expense->description,
                 'due_date' => $expense->due_date,
             ]);
+            $charge->expenseParticipant?->update(['amount' => $amt]);
         }
 
         $count = $charges->count();
@@ -249,7 +245,7 @@ class ExpenseService
      */
     public function redistributeChargeAmounts(Expense $expense): void
     {
-        $charges = $expense->charges()->orderBy('id')->get();
+        $charges = $expense->charges()->with('expenseParticipant')->orderBy('id')->get();
         $count = $charges->count();
         if ($count === 0) {
             return;
@@ -270,8 +266,114 @@ class ExpenseService
                 'description' => $expense->description,
                 'due_date' => $expense->due_date,
             ]);
+            $charge->expenseParticipant?->update(['amount' => $amount]);
         }
 
         $expense->update(['amount_per_member' => round($baseCents / 100, 2)]);
+    }
+
+    /**
+     * Atualiza snapshot do participante (nome/telefone e opcionalmente valor da cobrança).
+     * Exige todas as charges da despesa em `pending`.
+     *
+     * @param  array{name?: string, phone?: string, amount?: float|int|string|null}  $data
+     */
+    public function updateExpenseParticipant(ExpenseParticipant $participant, array $data): Expense
+    {
+        $expense = $participant->expense;
+        if ($expense->status === 'closed') {
+            throw new \DomainException('Esta despesa foi finalizada e nao aceita mais alteracoes.');
+        }
+
+        $charges = $expense->charges;
+        ChargeStatusTransition::assertAllPendingForRedistribution($charges);
+
+        $charge = Charge::query()
+            ->where('expense_participant_id', $participant->id)
+            ->firstOrFail();
+
+        return DB::transaction(function () use ($participant, $charge, $expense, $data) {
+            $name = array_key_exists('name', $data)
+                ? trim((string) $data['name'])
+                : $participant->name;
+            $phoneDigits = array_key_exists('phone', $data)
+                ? PhoneNormalizer::digits((string) $data['phone'])
+                : (string) $participant->phone_normalized;
+
+            if ($name === '' || strlen($phoneDigits) < 10) {
+                throw new \DomainException('Informe nome e telefone válidos.');
+            }
+
+            if ($phoneDigits !== (string) $participant->phone_normalized) {
+                $dup = $expense->charges()->whereHas('expenseParticipant', function ($q) use ($participant, $phoneDigits): void {
+                    $q->where('phone_normalized', $phoneDigits)
+                        ->where('id', '!=', $participant->id);
+                })->exists();
+                if ($dup) {
+                    throw new \DomainException('Já existe participante com este telefone nesta cobrança.');
+                }
+            }
+
+            $participant->update([
+                'name' => $name,
+                'phone' => $phoneDigits,
+                'phone_normalized' => $phoneDigits,
+            ]);
+
+            if (array_key_exists('amount', $data) && $data['amount'] !== null) {
+                $newAmt = round((float) $data['amount'], 2);
+                if ($newAmt <= 0) {
+                    throw new \DomainException('O valor do participante deve ser maior que zero.');
+                }
+                $charge->update([
+                    'amount' => $newAmt,
+                    'description' => $expense->description,
+                    'due_date' => $expense->due_date,
+                ]);
+                $participant->update(['amount' => $newAmt]);
+
+                $sum = round((float) $expense->charges()->sum('amount'), 2);
+                $total = round((float) $expense->total_amount, 2);
+                if (abs($sum - $total) > 0.02) {
+                    throw new \DomainException('A soma dos valores dos participantes deve ser igual ao valor total da cobrança.');
+                }
+
+                $count = $expense->charges()->count();
+                $avg = $count > 0 ? round($total / $count, 2) : 0;
+                $expense->update(['amount_per_member' => $avg]);
+            }
+
+            return $expense->fresh()->load(['charges.expenseParticipant', 'charges.teamMember']);
+        });
+    }
+
+    public function deleteExpenseParticipant(ExpenseParticipant $participant): Expense
+    {
+        $expense = $participant->expense;
+        if ($expense->status === 'closed') {
+            throw new \DomainException('Esta despesa foi finalizada e nao aceita mais alteracoes.');
+        }
+
+        $charges = $expense->charges;
+        ChargeStatusTransition::assertAllPendingForRedistribution($charges);
+
+        if ($charges->count() <= 1) {
+            throw new \DomainException('Não é possível remover o único participante. Exclua a cobrança ou adicione outro participante antes.');
+        }
+
+        $charge = Charge::query()
+            ->where('expense_participant_id', $participant->id)
+            ->firstOrFail();
+
+        DB::transaction(function () use ($participant, $charge) {
+            $charge->paymentProofs()->delete();
+            $charge->delete();
+            $participant->delete();
+        });
+
+        $reloaded = Expense::query()->findOrFail($expense->id);
+        $this->redistributeChargeAmounts($reloaded);
+
+        return $reloaded->fresh()->load(['charges.expenseParticipant', 'charges.teamMember']);
     }
 }
