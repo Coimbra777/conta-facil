@@ -2,48 +2,41 @@
 
 ## Stack
 
-- PHP 8.2+, Laravel 12, Sanctum, Doctrine DBAL (migrations com `change()`).
-- MySQL em dev/prod; SQLite em memória nos testes (`phpunit.xml`).
+- PHP 8.2+, Laravel 12, Sanctum  
+- MySQL em desenvolvimento/produção  
+- PHPUnit com SQLite em memória (`phpunit.xml`)
 
-## Estrutura de pastas (principais)
+## Estrutura (principais pastas)
 
 | Caminho | Função |
 |---------|--------|
-| `app/Http/Controllers/Api/V1/` | Controllers finos: auth, expenses, charges, public |
-| `app/Actions/` | Casos de uso por agregado (Charge, Expense) |
-| `app/Services/` | Orquestração e regras mais longas |
-| `app/Http/Requests/Api/V1/` | Validação e normalização |
-| `app/Http/Resources/` | Shape JSON |
+| `app/Http/Controllers/Api/V1/` | Auth, expenses, participantes, cobranças, público |
+| `app/Actions/` | Casos de uso (ex.: validar/rejeitar cobrança, proof) |
+| `app/Services/` | Orquestração (`ExpenseService`, `PaymentProofService`, …) |
+| `app/Http/Requests/Api/V1/` | Validação |
+| `app/Http/Resources/` | Formato JSON das respostas |
 | `app/Http/Responses/ApiResponse.php` | Envelope padrão |
-| `app/Exceptions/` | `HttpApiException`, exceções de domínio |
-| `app/Models/` | Eloquent; `Expense` protege `manage_token` / `public_hash` do mass assignment |
-| `app/Support/` | Parsers, normalizadores, transições de status |
-| `database/migrations/` | Schema versionado |
-| `tests/Feature/` | Fluxos API, público, segurança |
+| `app/Models/` | Eloquent (`User`, `Expense`, `ExpenseParticipant`, `Charge`, `PaymentProof`) |
+| `app/Support/` | Normalização, transições de status, autorização auxiliar |
+| `database/migrations/` | Schema |
+| `tests/Feature/` | Testes de API |
 
-Não há **Policies** Laravel separadas: autorização por `ExpenseAuthorizer` (`created_by`) e, no fluxo público, por `manage_token` / header `X-Manage-Token`.
+Autorização explícita em código: **`ExpenseAuthorizer`** (dono = `created_by`) e concerns/helpers para rotas públicas com **`manage_token`**.
 
-## Actions e services exemplares
+## Models principais
 
-- `CreateExpenseAction` / `UpdateExpenseAction` / `DeleteExpenseAction` / `AddExpenseParticipantsAction` / `UpdateExpenseParticipantAction` / `DeleteExpenseParticipantAction` + `ExpenseService`.
-- `SubmitPaymentProofAction` + `PaymentProofService` — upload seguro, transação.
-- `ValidateChargeAction` / `RejectChargeAction` — transições de `Charge`.
-- `PublicExpenseCreatorService` — fluxo sem usuário autenticado (`created_by` nulo; opcionalmente `owner_name` / `owner_phone`).
+- **User** — `hasMany` Expense via `created_by`
+- **Expense** — agrega Pix, totais, `public_hash`, `manage_token`, status
+- **ExpenseParticipant** — snapshot por despesa
+- **Charge** — `expense_id`, `expense_participant_id`, valor, status, datas
+- **PaymentProof** — arquivo ligado ao `Charge`
 
-## Testes
+## Fluxo de dados (exemplo)
 
-- `php artisan test` — Feature cobre auth, despesa, público, upload, manage token, rate limit, headers.
-- Fixture `tests/Support/ProofUploadFixture.php` — JPEG mínimo válido sem GD.
-
-## Banco
-
-- FKs com `cascadeOnDelete` / `nullOnDelete` conforme migration.
-- Índices únicos em tokens/hashes onde aplicável.
-- Tipos monetários: `decimal(10,2)`.
-
-### Participantes da cobrança (`expense_participants`)
-
-Quem aparece no link público e nas cobranças é **`ExpenseParticipant`** (snapshot por despesa). Cada charge expõe **`participant`** serializado a partir de `charge.expenseParticipant`. O fluxo público usa **`PublicParticipantChargeResolver`** para casar nome + telefone à cobrança correta.
+1. Organizador **POST /expenses** → `Expense` sem cobranças por participante até **POST …/participants**.  
+2. Serviço cria **ExpenseParticipant** + **Charge** e distribui valores.  
+3. Participante no link público → **validate-participant** / **submit-proof** → **PaymentProof** + mudança de status.  
+4. Organizador → **PATCH charges/{id}/validate|reject** → atualização de **Charge** e possível fechamento da **Expense**.
 
 ## Comandos úteis
 
@@ -54,10 +47,8 @@ php artisan test
 composer audit
 ```
 
-Com Docker (na raiz do repositório):
+Com Docker:
 
 ```bash
 docker compose exec app php artisan test
-# ou
-docker compose run --rm app php artisan test
 ```

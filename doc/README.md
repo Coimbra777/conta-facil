@@ -7,7 +7,7 @@
 | [API.md](./API.md) | Referência REST (`/api/v1`, `/api/public`) |
 | [BACKEND.md](./BACKEND.md) | Pastas Laravel, actions, services, testes |
 | [FRONTEND.md](./FRONTEND.md) | Vite/React, client, env, build, testes |
-| [SECURITY.md](./SECURITY.md) | Ameaças, controles, OWASP resumido |
+| [SECURITY.md](./SECURITY.md) | Bearer, manage_token, uploads, CORS, rate limit |
 | [DEPLOY.md](./DEPLOY.md) | Build da SPA e deploy |
 | [PRODUCTION_CHECKLIST.md](./PRODUCTION_CHECKLIST.md) | Checklist de produção |
 | [FUTURE_FEATURES.md](./FUTURE_FEATURES.md) | Ideias de roadmap |

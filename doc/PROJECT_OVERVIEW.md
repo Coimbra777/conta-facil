@@ -2,53 +2,38 @@
 
 ## O que é
 
-**ContaCerta Pix** (nome na UI; repositório também chamado **Conta Fácil**) organiza **cobranças compartilhadas via Pix**: o criador define um valor total, divide entre **participantes**, informa a chave Pix e compartilha um **link público**. Cada participante informa nome e telefone, vê o valor da sua parte, paga no app do banco e envia **comprovante**; o criador **aprova ou rejeita** no painel ou via link de gestão.
+**ContaCerta Pix** é uma aplicação para **cobranças compartilhadas via Pix**: o organizador define o valor total, cadastra **participantes**, informa a chave Pix e compartilha um **link público**. Quem deve pagar identifica-se, envia **comprovante**, e o organizador **aprova ou rejeita**.
 
 ## Problema que resolve
 
-- Reduz planilhas e cobranças soltas sem status de quem já pagou.
-- Um link por cobrança: visão enxuta para quem paga e visão de gestão para quem tem o token do organizador.
+Substituir planilhas e cobranças informais sem visibilidade de quem já pagou ou pendências por participante.
 
-## Quem usa
+## Fluxo simples
 
-- **Organizador:** conta registrada (Sanctum) ou fluxo pontual sem conta (`POST /api/public/expenses`).
-- **Participante:** qualquer pessoa com o link público; identifica-se com nome + telefone para ver status e enviar comprovante.
-
-## Fluxo principal
-
-1. Registro / login (quando usar conta).
-2. Criação da cobrança e inclusão de participantes (`ExpenseParticipant` + `Charge`).
-3. Compartilhamento do link `/p/{public_hash}`.
-4. Pagamento Pix **fora** do sistema.
+1. Cadastro / login (organizador) ou criação pública sem conta.
+2. Criação da cobrança e inclusão de participantes com valores.
+3. Distribuição do link público (`/p/{hash}`).
+4. Pagamento Pix fora do sistema.
 5. Upload do comprovante pelo participante.
-6. Validação ou rejeição pelo criador (autenticado ou rotas públicas com `manage_token`).
-7. Encerramento da despesa quando todas as cobranças estão validadas (conforme regras de negócio).
+6. Validação ou rejeição pelo organizador (painel ou gestão via token).
 
 ## Entidades principais
 
 | Entidade | Papel |
 |----------|--------|
-| `User` | Organizador autenticado |
-| `Expense` | Cobrança; Pix, total, vencimento, `public_hash`, `manage_token`, status; `created_by` opcional no fluxo anônimo |
-| `ExpenseParticipant` | Snapshot do participante **nesta** cobrança (nome, telefone, valor) |
-| `Charge` | Valor devido; ligado a um participante; na API aparece como **`participant`** |
-| `PaymentProof` | Arquivo do comprovante |
+| **User** | Organizador autenticado |
+| **Expense** | Cobrança (Pix, total, prazo, link público, token de gestão) |
+| **ExpenseParticipant** | Snapshot do participante naquela cobrança |
+| **Charge** | Valor devido e ciclo de status por participante |
+| **PaymentProof** | Arquivo do comprovante ligado à cobrança |
 
-**Cadeia:** `User → Expense → ExpenseParticipant → Charge → PaymentProof`.
+Relação: `User → Expense → ExpenseParticipant → Charge → PaymentProof`.
 
-## Status da cobrança (`Charge`)
+## Estados da cobrança individual (`Charge`)
 
-| API | Significado |
-|-----|-------------|
-| `pending` | Aguardando comprovante |
-| `proof_sent` | Comprovante enviado |
-| `validated` | Pagamento confirmado pelo organizador |
-| `rejected` | Comprovante recusado |
+- `pending` — aguardando comprovante  
+- `proof_sent` — comprovante enviado  
+- `validated` — aprovado pelo organizador  
+- `rejected` — recusado  
 
-A despesa (`Expense`) agrega status (ex.: `open`, `closed`) conforme regras do backend.
-
-## Visão de produto
-
-- Forte suporte a **fluxo público** + gestão com `?manage=` / `X-Manage-Token`.
-- **Multi-usuário:** cada conta vê apenas cobranças próprias (`created_by`).
-- **Pix manual** no MVP (chave + QR opcional copiado); sem gateway de liquidação integrado.
+A **Expense** também tem status agregado (`open` / `closed`) conforme regras do backend.

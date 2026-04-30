@@ -3,78 +3,47 @@
 ## Visão em camadas
 
 ```
-Browser (React SPA em public/spa)
-        │  HTTPS
+Browser (React SPA — dev: Vite :5173; produção: assets em public/spa)
+        │  HTTP(S)
         ▼
-Laravel (PHP-FPM) — rotas web: SPA shell; rotas /api/*: JSON
+Laravel — rotas web: shell SPA; rotas /api/*: JSON
         │
-        ├── MySQL (dados)
-        ├── Redis (opcional; fila/cache conforme .env)
+        ├── MySQL
+        ├── Redis (cache/fila conforme .env)
         └── storage/app (comprovantes)
 ```
 
-## Backend: Laravel 12 API
+## Backend (Laravel 12)
 
-- **Prefixo:** `routes/api.php` → URI base `/api` + grupos `v1`.
-- **Cobranças autenticadas:** CRUD e participantes em `/api/v1/expenses` (dono: `created_by`).
-- **Resposta padrão de domínio:** `App\Http\Responses\ApiResponse` (`success`, `message`, `data`, `meta` / erros com `code`).
-- **Exceção HTTP:** `HttpApiException` mapeada em `bootstrap/app.php` para o envelope.
-- **Auth:** Laravel Sanctum **Bearer token** (sem cookie SPA stateful neste projeto).
-- **Fluxo público:** identificação por `public_hash` na URL; poder de gestão por `manage_token` (query `manage` ou header `X-Manage-Token`), comparado com `hash_equals`.
-- **Controllers** delegam para **Actions** (ex.: `ValidateChargeAction`) e **Services** (ex.: `ExpenseService`, `PaymentProofService`).
-- **Form Requests** centralizam validação; **Resources** formatam JSON.
-- **Middleware:** throttle global API + limitadores nomeados; `SecurityHeaders` (HSTS em produção HTTPS, `nosniff`, frame deny, etc.).
+- Rotas em `routes/api.php`: prefixo **`/api`**; API versionada em **`/api/v1`**.
+- **Sanctum:** token Bearer em rotas protegidas.
+- **Respostas:** envelope `ApiResponse` (`success`, `message`, `data`, `meta`) na maior parte dos endpoints; rotas de **auth** devolvem JSON direto (`user`, `token`).
+- **Fluxo público:** despesa identificada por `public_hash`; gestão com `manage_token` (query `manage` ou header `X-Manage-Token`).
+- **Organização do código:** controllers finos, **Actions**, **Services**, **Form Requests**, **Resources**.
 
-### Padrão Controller → Action → Service → Resource
+## Frontend (React + Vite + TypeScript)
 
-- **Consistente** na maior parte dos fluxos de despesa/cobrança e público.
-- **Exceção intencional:** `AuthController` devolve JSON “cru” (`user` + `token` / `message`) para compatibilidade com o client React; o frontend já trata esse formato em `authLogin` / `authRegister`.
+- Código em `frontend/`.
+- **Desenvolvimento:** `npm run dev` — servidor Vite no host (não há serviço frontend no Docker Compose).
+- **Produção:** `npm run build` gera `public/spa/`; o Laravel serve o HTML shell e os assets sob `/spa/`.
+- **API:** `frontend/src/lib/api/client.ts` — base opcional `VITE_API_BASE_URL` para apontar ao Laravel em dev.
 
-## Frontend: React + Vite + TypeScript
+## Modelagem de dados
 
-- **Código:** `frontend/`; **build:** `npm run build` → artefatos em `public/spa/` com `manifest: true`.
-- **Router:** React Router v6; rotas públicas (`/p/:hash`) vs. autenticadas (`/dashboard`, etc.).
-- **Estado remoto:** TanStack Query disponível (`App.tsx`), mas grande parte das telas usa `useState` + `api` imperativo.
-- **API:** `frontend/src/lib/api/client.ts` — `VITE_API_BASE_URL` definido → chamadas reais; ausente → `mockStore` (localStorage) para demo offline.
-
-## Banco de dados
-
-- **Produção/dev:** MySQL 8 (`utf8mb4` / `utf8mb4_unicode_ci`).
-- **Testes PHPUnit:** SQLite `:memory:` via `phpunit.xml` (sem exigir MySQL na CI).
-
-### Modelagem de cobrança compartilhada
-
-Relação principal: **`users`** → **`expenses`** (`created_by`) → **`expense_participants`** → **`charges`** (`expense_participant_id`) → **`payment_proofs`**.
-
-Cada linha em **`expense_participants`** é um snapshot (nome, telefone, valor) daquele participante **naquela** despesa. **`charges`** sempre referenciam `expense_participant_id`.
-
-## Decisões arquiteturais relevantes
-
-| Decisão | Motivo |
-|---------|--------|
-| SPA servida pelo mesmo host em produção | Mesma origem reduz complexidade CORS; assets em `/spa/assets/*`. |
-| `manage_token` na query | Compartilhamento simples do link de gestão; risco mitigado por não colocar em link de participante e por rate limit. |
-| Token Sanctum em `localStorage` | Simplicidade; mitigação principal é anti-XSS e CSP futura. |
-| Upload validado por magic bytes no backend | Não confiar em MIME do cliente. |
-
-## Diagrama lógico (fluxo público)
-
-```mermaid
-sequenceDiagram
-    participant P as Participante
-    participant SPA as React SPA
-    participant API as Laravel API
-    participant DB as MySQL
-
-    P->>SPA: Abre /p/{hash}
-    SPA->>API: GET /api/v1/public/expenses/{hash}
-    API->>DB: Expense + charges
-    API-->>SPA: PublicExpenseResource (público ou admin se manage ok)
-    P->>SPA: Nome + telefone
-    SPA->>API: POST .../validate-participant
-    API->>DB: Resolver charge
-    API-->>SPA: status + can_submit_proof
-    P->>SPA: Envia arquivo
-    SPA->>API: POST .../submit-proof (multipart)
-    API->>DB: PaymentProof + status
+```txt
+User
+  └── Expense (created_by)
+        └── ExpenseParticipant
+              └── Charge
+                    └── PaymentProof
 ```
+
+Cada **ExpenseParticipant** é um registro próprio daquele participante **naquela** despesa; **Charge** referencia sempre um participante.
+
+## Decisões relevantes
+
+| Tema | Escolha |
+|------|---------|
+| SPA + API | Mesmo deploy possível; CORS configurável para origem do Vite em dev |
+| Token | Bearer em `Authorization`; persistido no cliente (ver `doc/SECURITY.md`) |
+| Upload | Validação de conteúdo no servidor; arquivos em storage privado |

@@ -2,64 +2,50 @@
 
 ## Stack
 
-- React 18, React Router 6, TypeScript, Tailwind, shadcn/ui (componentes em `components/ui`).
-- TanStack Query instalado; uso ainda majoritariamente imperativo via `api` singleton.
-- Vitest + Testing Library (poucos testes).
+- React 18, React Router 6, TypeScript  
+- Vite 5, Tailwind, shadcn/ui  
+- Vitest + Testing Library  
 
 ## Estrutura
 
 | Caminho | Função |
 |---------|--------|
-| `src/pages/` | Telas: `Landing`, `Auth`, `Dashboard`, `NewExpense`, `ExpenseDetail`, `PublicExpense`, etc. |
-| `src/components/` | UI reutilizável, `AppShell`, `ProofUpload`, `ParticipantList` |
-| `src/lib/api/client.ts` | Client HTTP, envelope, auth, rotas v1 |
-| `src/lib/api/mockStore.ts` | Mock + localStorage quando sem `VITE_API_BASE_URL` |
-| `src/lib/types.ts` | Tipos do domínio na UI |
-| `src/lib/format.ts` | BRL, datas, `buildPublicLink` (`/p/{hash}` sem `manage`) |
-| `src/lib/auth.tsx` | Context de usuário |
+| `src/pages/` | Telas (auth, dashboard, cobrança, público `/p/:hash`, …) |
+| `src/components/` | UI composta (`ProofUpload`, listas, shell) |
+| `src/lib/api/client.ts` | HTTP, envelope, rotas `/api/v1`, fluxo público |
+| `src/lib/api/mockStore.ts` | Demo offline quando não há `VITE_API_BASE_URL` |
+| `src/lib/auth.tsx` | Contexto do usuário logado |
+| `src/lib/types.ts` | Tipos da UI |
 
-## Variáveis de ambiente
+## Vite
 
-- `VITE_API_BASE_URL` — URL do Laravel (ex.: `http://localhost:8000`). Não colocar segredos; só origem pública da API.
-
-## Rotas relevantes
-
-- `/login`, `/register` — auth.
-- `/dashboard`, `/cobrancas/...` — área logada (`ProtectedRoute`).
-- `/p/:hash` — página pública; lê `?manage=` para modo gestão.
+- **Dev:** `npm run dev` — URL padrão http://localhost:5173  
+- **Build:** `npm run build` — saída em `public/spa/` (`base: '/spa/'`)
 
 ## API client
 
-- Cobranças autenticadas: `GET/POST /expenses`, `POST /expenses/{id}/participants`, `GET /expenses/{id}`, `DELETE /expenses/{id}`.
-- `getToken` / `setToken` — `localStorage` chave `contacerta:auth:v1`.
-- Rotas autenticadas: `v1Fetch` com Bearer.
-- Rotas públicas sensíveis: **`publicV1Fetch`** para `validate-participant` (sem Bearer); `getPublicExpense` / `submitProof` usam `fetch` sem header de auth.
-- **401** em rotas autenticadas: limpa token e redireciona para `/login`.
-- **403**: mensagem de acesso negado.
-- **422**: erros de validação mapeados para `ApiClientError`.
-- Domínio na UI: lista agregada **`participants`**; cada charge na API traz **`participant`**. Respostas usam **`amount_per_participant`**.
+- Variável **`VITE_API_BASE_URL`** (ex.: `http://localhost:8000`) para apontar ao Laravel durante o desenvolvimento.  
+- Rotas autenticadas: header **Bearer** com token Sanctum.  
+- Rotas públicas sensíveis usam helpers que **não** enviam o Bearer do organizador onde não deve (participante no mesmo navegador).
 
-## Build
+## Auth: real vs demo
+
+- **Real:** login/registro contra a API; token em `localStorage`.  
+- **Demo:** modo disponível na UI quando não há API configurada — dados em memória/localStorage via `mockStore`.
+
+## Rotas principais (SPA)
+
+- `/login`, `/register`  
+- Área logada: `/dashboard`, fluxos de nova cobrança e detalhe  
+- Público: `/p/:hash` — query `manage` para modo gestão  
+
+## Build e testes
 
 ```bash
 cd frontend
 npm ci
-cp .env.example .env   # ajustar VITE_API_BASE_URL
-npm run dev
-npm run build          # gera public/spa
+npm run build
+npm run test
 ```
 
-## Testes
-
-Scripts em `frontend/package.json`:
-
-```bash
-npm run test          # Vitest, modo run único (CI)
-npm run test:watch    # Vitest interativo
-```
-
-## Boas práticas
-
-- Preferir texto vindo da API como filhos de React (escapado), não `dangerouslySetInnerHTML`.
-- Não logar token nem `manage` no console.
-- Link para participantes: usar `buildPublicLink` (sem token); link de gestão só quando o produto exigir, em canal privado.
+Scripts reais: ver `frontend/package.json` (`test` = `vitest run`, `test:watch` = Vitest interativo).
