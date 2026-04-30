@@ -8,12 +8,12 @@ import {
 import {
     api,
     AUTH_SESSION_CLEARED_EVENT,
+    clearDemoMode,
+    exitDemoMode,
     getToken,
     isDemoMode,
-    setDemoMode,
     setToken,
 } from "@/lib/api/client";
-import { mockApi } from "@/lib/api/mockStore";
 import type { LoginPayload, RegisterPayload, User } from "@/lib/types";
 
 type AuthContextValue = {
@@ -29,21 +29,6 @@ type AuthContextValue = {
 };
 
 const Ctx = createContext<AuthContextValue | undefined>(undefined);
-
-async function leaveDemoSession(): Promise<void> {
-    if (!isDemoMode()) return;
-    await mockApi.logout();
-    setDemoMode(false);
-}
-
-async function restoreRealSessionUser(): Promise<User | null> {
-    if (!getToken()) return null;
-    try {
-        return await api.me();
-    } catch {
-        return null;
-    }
-}
 
 async function loadCurrentUser(): Promise<User | null> {
     const hasDemoSession = isDemoMode();
@@ -131,43 +116,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isDemo,
         refreshUser,
         login: async (payload) => {
-            const wasDemo = isDemoMode();
             setLoading(true);
             try {
-                if (wasDemo) {
-                    await leaveDemoSession();
-                }
+                await exitDemoMode();
                 const { token, user: nextUser } = await api.login(payload);
                 if (token) setToken(token);
                 setUser(nextUser);
                 setIsDemo(isDemoMode());
-            } catch (error) {
-                if (wasDemo) {
-                    setUser(await restoreRealSessionUser());
-                    setIsDemo(false);
-                }
-                throw error;
             } finally {
                 setLoading(false);
             }
         },
         register: async (payload) => {
-            const wasDemo = isDemoMode();
             setLoading(true);
             try {
-                if (wasDemo) {
-                    await leaveDemoSession();
-                }
+                await exitDemoMode();
                 const { token, user: nextUser } = await api.register(payload);
                 if (token) setToken(token);
                 setUser(nextUser);
                 setIsDemo(isDemoMode());
-            } catch (error) {
-                if (wasDemo) {
-                    setUser(await restoreRealSessionUser());
-                    setIsDemo(false);
-                }
-                throw error;
             } finally {
                 setLoading(false);
             }
@@ -186,16 +153,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setLoading(true);
             try {
                 if (isDemoMode()) {
-                    await leaveDemoSession();
-                    setUser(await restoreRealSessionUser());
+                    await exitDemoMode();
                 } else {
                     try {
                         await api.logout();
                     } catch {
                         setToken(null);
                     }
+                    clearDemoMode();
                     setUser(null);
                 }
+                setUser(null);
                 setIsDemo(isDemoMode());
             } finally {
                 setLoading(false);

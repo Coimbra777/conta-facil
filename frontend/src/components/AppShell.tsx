@@ -61,9 +61,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {isDemo && (
                 <div
                     role="status"
-                    className="border-b-4 border-foreground bg-arcade-yellow px-4 py-3 text-center font-bold text-sm"
+                    className="border-b-4 border-foreground bg-arcade-yellow px-4 py-3"
                 >
-                    Modo demonstração — os dados exibidos não são reais e não são gravados no servidor.
+                    <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-center gap-3 text-center">
+                        <span className="font-bold text-sm">
+                            Você está em modo demonstração. Os dados exibidos são fictícios.
+                        </span>
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                await logout();
+                                nav("/", { replace: true });
+                            }}
+                            className="border-4 border-foreground bg-card px-4 py-2 rounded-lg font-black uppercase text-xs brutal-press brutal-press-sm"
+                        >
+                            Sair da demonstração
+                        </button>
+                    </div>
                 </div>
             )}
 

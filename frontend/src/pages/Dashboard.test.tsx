@@ -7,6 +7,8 @@ import { api } from "@/lib/api/client";
 import type { Expense } from "@/lib/types";
 import { CLOSED_EXPENSE_SHARE_DISABLED_HINT } from "@/lib/closedExpenseCopy";
 
+const DEMO_STORAGE_KEY = "contacerta:demo:v1";
+
 function renderDashboard() {
     return render(
         <MemoryRouter initialEntries={["/dashboard"]}>
@@ -76,6 +78,32 @@ describe("Dashboard", () => {
         expect(screen.queryByText(/WhatsApp/i)).toBeNull();
         expect(
             screen.getByText(CLOSED_EXPENSE_SHARE_DISABLED_HINT),
+        ).toBeInTheDocument();
+    });
+
+    it("shows the demo banner when demo mode is active", async () => {
+        localStorage.setItem(DEMO_STORAGE_KEY, "1");
+        vi.spyOn(api, "listExpenses").mockResolvedValue({
+            expenses: [expenseRow()],
+            pagination: {
+                currentPage: 1,
+                lastPage: 1,
+                perPage: 15,
+                total: 1,
+            },
+        });
+
+        renderDashboard();
+
+        await waitFor(() =>
+            expect(
+                screen.getByText(
+                    /Você está em modo demonstração\. Os dados exibidos são fictícios\./i,
+                ),
+            ).toBeInTheDocument(),
+        );
+        expect(
+            screen.getByRole("button", { name: /sair da demonstração/i }),
         ).toBeInTheDocument();
     });
 });

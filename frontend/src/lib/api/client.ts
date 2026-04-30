@@ -47,6 +47,10 @@ export function setDemoMode(on: boolean): void {
     }
 }
 
+export function clearDemoMode(): void {
+    setDemoMode(false);
+}
+
 /** Cobranças / sessão logada: mock só em modo demo explícito. */
 function useMockForProtected(): boolean {
     return isDemoMode();
@@ -86,6 +90,18 @@ export function clearAuthStorage(): void {
     if (typeof window !== "undefined") {
         window.dispatchEvent(new Event(AUTH_SESSION_CLEARED_EVENT));
     }
+}
+
+export async function exitDemoMode(): Promise<void> {
+    if (isDemoMode()) {
+        try {
+            await mockApi.logout();
+        } catch {
+            /* ignore */
+        }
+    }
+    clearDemoMode();
+    clearAuthStorage();
 }
 
 export function getSafeRedirect(
@@ -551,8 +567,11 @@ async function v1FetchBlob(path: string): Promise<Blob> {
 export const api = {
     /** Modo apresentação: sem Bearer; dados só em mockStore. */
     enterDemo: async (): Promise<User> => {
+        clearAuthStorage();
+        clearDemoMode();
+        const user = await mockApi.enterDemo();
         setDemoMode(true);
-        return mockApi.enterDemo();
+        return user;
     },
 
     register: (

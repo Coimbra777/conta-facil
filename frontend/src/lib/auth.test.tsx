@@ -10,7 +10,7 @@ import AuthPage from "@/pages/Auth";
 import Landing from "@/pages/Landing";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AuthProvider, useAuth } from "@/lib/auth";
-import { api, getToken } from "@/lib/api/client";
+import { api } from "@/lib/api/client";
 import { mockApi } from "@/lib/api/mockStore";
 import type { User } from "@/lib/types";
 
@@ -331,20 +331,14 @@ describe("auth flow", () => {
         });
     });
 
-    it("demo não sobrescreve auth real e sair do demo restaura a sessão real", async () => {
+    it("entrar em demo salva flag demo e limpa sessão real existente", async () => {
         localStorage.setItem(AUTH_STORAGE_KEY, "persisted-token");
-        vi.spyOn(api, "me")
-            .mockResolvedValueOnce(realUser())
-            .mockResolvedValueOnce(realUser());
-        vi.spyOn(api, "enterDemo").mockImplementation(async () => {
-            localStorage.setItem(DEMO_STORAGE_KEY, "1");
-            return {
-                id: "demo",
-                name: "Visitante",
-                email: "demo@contacerta.local",
-            };
+        vi.spyOn(api, "me").mockResolvedValue(realUser());
+        vi.spyOn(mockApi, "enterDemo").mockResolvedValue({
+            id: "demo",
+            name: "Visitante",
+            email: "demo@contacerta.local",
         });
-        vi.spyOn(mockApi, "logout").mockResolvedValue(true);
 
         renderAuthApp("/status");
 
@@ -363,17 +357,81 @@ describe("auth flow", () => {
                 screen.getByText("user:demo@contacerta.local"),
             ).toBeInTheDocument();
         });
-        expect(getToken()).toBe("persisted-token");
+        expect(localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
         expect(localStorage.getItem(DEMO_STORAGE_KEY)).toBe("1");
+    });
+
+    it("sair da demo limpa token e flag demo", async () => {
+        localStorage.setItem(AUTH_STORAGE_KEY, "persisted-token");
+        localStorage.setItem(DEMO_STORAGE_KEY, "1");
+        vi.spyOn(api, "me").mockResolvedValue({
+            id: "demo",
+            name: "Visitante",
+            email: "demo@contacerta.local",
+        });
+        vi.spyOn(mockApi, "logout").mockResolvedValue(true);
+
+        renderAuthApp("/status");
+
+        await waitFor(() => {
+            expect(
+                screen.getByText("user:demo@contacerta.local"),
+            ).toBeInTheDocument();
+        });
 
         fireEvent.click(screen.getByRole("button", { name: /^sair$/i }));
 
         await waitFor(() => {
-            expect(
-                screen.getByText(`user:${realUser().email}`),
-            ).toBeInTheDocument();
+            expect(screen.getByText("guest")).toBeInTheDocument();
         });
-        expect(getToken()).toBe("persisted-token");
+        expect(localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
         expect(localStorage.getItem(DEMO_STORAGE_KEY)).toBeNull();
+    });
+
+    it("login real remove flag demo antes de salvar a sessão", async () => {
+        localStorage.setItem(DEMO_STORAGE_KEY, "1");
+        vi.spyOn(api, "me").mockResolvedValue(null);
+        vi.spyOn(mockApi, "logout").mockResolvedValue(true);
+        vi.spyOn(api, "login").mockResolvedValue({
+            token: "real-token",
+            user: realUser(),
+        });
+
+        renderAuthApp("/login?redirect=/dashboard");
+
+        fireEvent.change(await screen.findByLabelText(/e-mail/i), {
+            target: { value: "ana@contacerta.dev" },
+        });
+        fireEvent.change(screen.getByLabelText(/^senha$/i), {
+            target: { value: "secret123" },
+        });
+        fireEvent.click(screen.getByRole("button", { name: /^entrar$/i }));
+
+        await waitFor(() => {
+            expect(screen.getByText("Dashboard")).toBeInTheDocument();
+        });
+        expect(localStorage.getItem(AUTH_STORAGE_KEY)).toBe("real-token");
+        expect(localStorage.getItem(DEMO_STORAGE_KEY)).toBeNull();
+    });
+
+    it("acessar a home em modo demo encerra automaticamente a sessão demo", async () => {
+        localStorage.setItem(AUTH_STORAGE_KEY, "persisted-token");
+        localStorage.setItem(DEMO_STORAGE_KEY, "1");
+        vi.spyOn(api, "me").mockResolvedValue({
+            id: "demo",
+            name: "Visitante",
+            email: "demo@contacerta.local",
+        });
+        vi.spyOn(mockApi, "logout").mockResolvedValue(true);
+
+        renderAuthApp("/");
+
+        await waitFor(() => {
+            expect(localStorage.getItem(AUTH_STORAGE_KEY)).toBeNull();
+            expect(localStorage.getItem(DEMO_STORAGE_KEY)).toBeNull();
+        });
+        expect(
+            screen.getAllByRole("link", { name: /^entrar$/i }).length,
+        ).toBeGreaterThan(0);
     });
 });

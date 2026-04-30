@@ -1,10 +1,17 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, CheckCircle2, ClipboardList, MessageSquareText, PiggyBank, Plane, Users2, PartyPopper, Trophy, Home } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 export default function Landing() {
-    const { user, loading, logout } = useAuth();
-    const isLoggedIn = Boolean(user);
+    const { user, loading, logout, isDemo } = useAuth();
+    const isLoggedIn = Boolean(user) && !isDemo;
+
+    useEffect(() => {
+        if (!loading && isDemo) {
+            void logout();
+        }
+    }, [isDemo, loading, logout]);
 
     return (
         <div className="min-h-dvh bg-background text-foreground">
