@@ -53,3 +53,11 @@ php artisan migrate
 php artisan test
 composer audit
 ```
+
+Com Docker (na raiz do repositório):
+
+```bash
+docker compose exec app php artisan test
+# ou
+docker compose run --rm app php artisan test
+```

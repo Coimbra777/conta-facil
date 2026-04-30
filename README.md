@@ -1,52 +1,38 @@
-# Conta Fácil
+# ContaCerta Pix
 
-API **Laravel** (`/api/v1`) + SPA **React/Vite** em `frontend/`.
+Sistema para criar **cobranças compartilhadas via Pix**: definir total, cadastrar participantes, compartilhar link público, receber comprovantes e aprovar ou rejeitar pagamentos.
 
-**Domínio principal:** cobrança compartilhada via Pix — modelagem **`User → Expense → ExpenseParticipant → Charge → PaymentProof`**. Usuário autenticado gerencia apenas despesas com `created_by = auth()->id()` em `/api/v1/expenses`; o fluxo público usa `X-Manage-Token` para administrar participantes e validar comprovantes. Payload JSON usa **`participant` / `participants`** e **`amount_per_participant`** (sem equipes ou `team_*`).
+_Repositório também referido como **Conta Fácil**._
 
-## Requisitos
+## Stack
 
-- **Docker** e **Docker Compose** (plugin `docker compose`)
-- **Node.js 20+** (apenas para o frontend em desenvolvimento com Vite)
+- **Backend:** Laravel 12 — API REST em `/api/v1`
+- **Frontend:** React + Vite + TypeScript (`frontend/`)
+- **Banco:** MySQL 8
+- **Auth:** Laravel Sanctum (Bearer token)
+- **Orquestração local:** Docker Compose (`docker-compose.yml`)
 
-O backend roda nos containers; não é obrigatório PHP ou Composer instalados na máquina — os comandos Artisan abaixo usam o serviço `app`.
+## Arquitetura
 
----
+API REST + SPA React (build em `public/spa/` em produção).
 
-## Rodar localmente com Docker Compose
+**Modelo de dados:**
 
-### 1. Ambiente
-
-Na raiz do repositório:
-
-```bash
-cp .env.example .env
+```txt
+User → Expense → ExpenseParticipant → Charge → PaymentProof
 ```
 
-Ajuste no `.env` pelo menos:
+## Rodando com Docker
 
-| Variável                      | Dentro do Compose (recomendado)                                                                                         |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `APP_URL`                     | `http://localhost:8000`                                                                                                 |
-| `DB_HOST`                     | `db`                                                                                                                    |
-| `DB_PORT`                     | `3306`                                                                                                                  |
-| `DB_DATABASE`                 | Ex.: `conta_facil` (deve bater com o banco criado pelo MySQL do Compose)                                                |
-| `DB_USERNAME` / `DB_PASSWORD` | Alinhados ao `docker-compose.yml` (valores padrão do exemplo: `username` / `userpass` se usar `.env.example` como base) |
-| `REDIS_HOST`                  | `redis`                                                                                                                 |
-| `CORS_ALLOWED_ORIGINS`        | `http://localhost:5173` (para o Vite no host)                                                                           |
+Na raiz do projeto, copie e ajuste o `.env` (veja comentários em `.env.example`). Com Compose, use **`DB_HOST=db`**, **`DB_PORT=3306`**, **`REDIS_HOST=redis`**, e **`CORS_ALLOWED_ORIGINS=http://localhost:5173`** se for desenvolver o frontend no host.
 
-O serviço `db` usa `DB_DATABASE`, `DB_USERNAME` e `DB_PASSWORD` do seu `.env` para criar o MySQL. **Porta no computador:** MySQL em `localhost:3300` → dentro da rede Docker é sempre `db:3306`.
-
-### 2. Subir os containers
+Subir serviços (PHP-FPM, Nginx, MySQL, Redis, phpMyAdmin):
 
 ```bash
-docker compose build
-docker compose up -d
+docker compose up -d --build
 ```
 
-Aguarde o MySQL ficar pronto (alguns segundos na primeira vez) antes do migrate.
-
-### 3. Dependências e Laravel (dentro do container `app`)
+Dependências PHP e chave da aplicação (uma vez, ou após clonar):
 
 ```bash
 docker compose exec app composer install
@@ -54,15 +40,40 @@ docker compose exec app php artisan key:generate
 docker compose exec app php artisan migrate
 ```
 
-### 4. URLs úteis
+> **`migrate:fresh` apaga todas as tabelas.** Use só quando quiser resetar o banco:  
+> `docker compose exec app php artisan migrate:fresh --force`
 
-| Serviço         | URL                                             |
-| --------------- | ----------------------------------------------- |
-| API / app       | **http://localhost:8000** (nginx → PHP-FPM)     |
-| Endpoint da API | `http://localhost:8000/api/v1`                  |
-| phpMyAdmin      | http://localhost:8080 (host `db`, porta `3306`) |
+**URLs usuais**
 
-### 5. Frontend (fora do Docker, com hot reload)
+| O quê            | URL                                      |
+|------------------|------------------------------------------|
+| API (via Nginx)  | http://localhost:8000                  |
+| Prefixo JSON     | http://localhost:8000/api/v1             |
+| MySQL no host    | `localhost:3300` (mapeado para o container) |
+| phpMyAdmin       | http://localhost:8080                    |
+
+O frontend **não** está no `docker-compose.yml`. Para hot reload, rode o Vite **no host** (abaixo).
+
+## Rodando sem Docker
+
+Requisitos: PHP 8.2+, Composer, Node 20+, MySQL acessível.
+
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+# Ajuste DB_* no .env (ex.: 127.0.0.1:3306)
+php artisan migrate
+php artisan serve
+```
+
+Opcional — backend + fila + logs + Vite juntos (precisa de `npx`/`npm`):
+
+```bash
+composer run dev
+```
+
+### Frontend (com ou sem Docker no backend)
 
 ```bash
 cd frontend
@@ -70,20 +81,59 @@ npm install
 cp .env.example .env
 ```
 
-No `.env` do frontend defina `VITE_API_BASE_URL=http://localhost:8000`, depois:
+Defina no `frontend/.env` (desenvolvimento com API em `:8000`):
+
+```env
+VITE_API_BASE_URL=http://localhost:8000
+```
 
 ```bash
 npm run dev
 ```
 
-SPA em **http://localhost:5173**, falando com a API em `:8000`.
+SPA em **http://localhost:5173** · API em **http://localhost:8000/api/v1**
 
----
+## Build do frontend
 
-## Testes (backend no Docker)
+```bash
+cd frontend
+npm ci
+npm run build
+```
+
+Saída em `public/spa/` (servida pelo Laravel em produção).
+
+## Testes
+
+**Backend (PHPUnit)** — com containers no ar:
 
 ```bash
 docker compose exec app php artisan test
 ```
 
----
+Ou one-shot (sobe `app` + dependências declaradas no serviço):
+
+```bash
+docker compose run --rm app php artisan test
+```
+
+**Frontend (Vitest)** — conforme `frontend/package.json`:
+
+```bash
+cd frontend
+npm run test
+npm run build
+```
+
+## Documentação
+
+Detalhes de API, arquitetura, segurança e deploy: pasta **`doc/`**. Índice em **`doc/README.md`**.
+
+## Fluxo principal
+
+1. Usuário cria conta / login  
+2. Cria cobrança (`Expense`)  
+3. Adiciona participantes (`ExpenseParticipant` + `Charge`)  
+4. Compartilha link público (`/p/{hash}`)  
+5. Participante identifica-se e envia comprovante  
+6. Criador valida ou rejeita; pode usar link de gestão com `manage_token` (`?manage=` ou header `X-Manage-Token`)

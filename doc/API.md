@@ -1,8 +1,15 @@
-# API REST — `/api/v1`
+# API REST
 
-Base: `{APP_URL}/api/v1`  
-Autenticação (rotas protegidas): header `Authorization: Bearer {token}`  
-Envelope de sucesso/erro (maioria dos endpoints):
+**Base autenticada e público `v1`:** `{APP_URL}/api/v1`  
+**Criação pública fora de `v1`:** `{APP_URL}/api/public/...`
+
+Autenticação (rotas protegidas): header `Authorization: Bearer {token}` (Sanctum).
+
+---
+
+## Envelope JSON
+
+Maioria dos endpoints devolve:
 
 ```json
 {
@@ -13,6 +20,8 @@ Envelope de sucesso/erro (maioria dos endpoints):
 }
 ```
 
+Erro típico:
+
 ```json
 {
   "success": false,
@@ -22,126 +31,135 @@ Envelope de sucesso/erro (maioria dos endpoints):
 }
 ```
 
-**Exceção — autenticação:** `POST register`, `POST login`, `GET me`, `POST logout` retornam corpo direto (`user`, `token` ou `message`) sem envelope — o client React já trata isso.
+**Exceção — auth:** `POST .../auth/register`, `POST .../auth/login`, `GET .../auth/me`, `POST .../auth/logout` retornam JSON direto (`user`, `token`, `message`) **sem** esse envelope — o app React já trata esse formato.
 
-Rate limit: throttle global da API (ex.: 60/min por IP) + limitadores nomeados em rotas sensíveis (`auth-login`, `auth-register`, `public-submit-proof`, etc.).
+**Rate limiting:** throttle global na API (ex.: 60 req/min por IP) + limitadores nomeados em rotas sensíveis (`auth-login`, `auth-register`, `public-submit-proof`, etc.).
+
+---
+
+## Modelagem exposta
+
+Domínio: **`users`**, **`expenses`**, **`expense_participants`**, **`charges`**, **`payment_proofs`**.
+
+- Objeto `expense` inclui `amount_per_participant` quando aplicável.
+- Cada item em `charges[]` inclui **`participant`** (snapshot: nome, telefone, valores), derivado de `ExpenseParticipant`.
 
 ---
 
 ## Auth
 
-### `POST /api/v1/auth/register`
+| Método | Rota |
+|--------|------|
+| `POST` | `/api/v1/auth/register` |
+| `POST` | `/api/v1/auth/login` |
+| `GET` | `/api/v1/auth/me` |
+| `POST` | `/api/v1/auth/logout` |
 
-Body (JSON): `name`, `email`, `password`, `password_confirmation`, opcional `phone`, `cpf` (11 dígitos, único).
+**Registrar** — body JSON: `name`, `email`, `password`, `password_confirmation`; opcional `phone`, `cpf` (11 dígitos, único).  
+**201:** `{ "user": {…}, "token": "…" }`
 
-**201** — `{ "user": {…}, "token": "…" }`  
-**422** — validação Laravel (no envelope se passar pelo handler global) / erros de campo.
-
-### `POST /api/v1/auth/login`
-
-Body: `email`, `password`.
-
-**200** — `{ "user", "token" }`  
-**401** — `{ "message": "Invalid credentials." }`
-
-### `POST /api/v1/auth/logout` (Bearer)
-
-**200** — `{ "message": "Successfully logged out." }`
-
-### `GET /api/v1/auth/me` (Bearer)
-
-**200** — `{ "user": {…} }`
+**Login** — `email`, `password`.  
+**200:** `{ "user", "token" }` · **401:** credenciais inválidas (ou código específico conforme implementação).
 
 ---
 
-## Modelagem de dados (API v1)
+## Cobranças — usuário autenticado
 
-Tabelas ativas: **`users`**, **`expenses`**, **`expense_participants`**, **`charges`**, **`payment_proofs`**. Sem `teams` / `team_members` no schema atual.
+Prefixo: **`/api/v1`** + Bearer.
 
----
+| Método | Rota |
+|--------|------|
+| `GET` | `/api/v1/expenses` |
+| `POST` | `/api/v1/expenses` |
+| `GET` | `/api/v1/expenses/{expense}` |
+| `PATCH` | `/api/v1/expenses/{expense}` |
+| `DELETE` | `/api/v1/expenses/{expense}` |
+| `POST` | `/api/v1/expenses/{expense}/participants` |
+| `PATCH` | `/api/v1/expenses/{expense}/participants/{participant}` |
+| `DELETE` | `/api/v1/expenses/{expense}/participants/{participant}` |
 
-## Cobranças — usuário autenticado (Bearer)
+Dono da cobrança: `expenses.created_by` = usuário logado.
 
-Dono da cobrança: `expenses.created_by` = usuário logado. Participantes: `expense_participants` + `charges`.
+**Exemplo — criar cobrança (resposta simplificada):**
 
-Objeto `expense` inclui `amount_per_participant` (valor médio por cobrança quando aplicável). Cada item em `charges[]` inclui `participant` (snapshot; sem campo `member`).
-
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| GET | `/expenses` | Lista cobranças do usuário |
-| POST | `/expenses` | Cria cobrança (sem equipe) |
-| GET | `/expenses/{expense}` | Detalhe com `charges` |
-| PATCH | `/expenses/{expense}` | Atualiza |
-| DELETE | `/expenses/{expense}` | Exclui (se todas as charges `pending`) |
-| POST | `/expenses/{expense}/participants` | Adiciona participantes e valores |
-| PATCH | `/expenses/{expense}/participants/{participant}` | Atualiza snapshot do participante |
-| DELETE | `/expenses/{expense}/participants/{participant}` | Remove participante (recalcula divisão) |
-
----
-
-## Validação de cobrança autenticada (Bearer)
-
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| PATCH | `/charges/{charge}/validate` | Aprova comprovante |
-| PATCH | `/charges/{charge}/reject` | Rejeita (`reason` opcional/limitado) |
-| GET | `/charges/{charge}/proof` | Download comprovante |
-
----
-
-## Público — criar despesa sem login
-
-### `POST /api/public/expenses`
-
-Fora do prefixo `v1` no arquivo de rotas: **`/api/public/expenses`**.  
-Cria despesa “anônima” com participantes; retorno em envelope com `expense` resumido.
+```json
+{
+  "success": true,
+  "data": {
+    "expense": {
+      "id": 1,
+      "description": "Churrasco",
+      "total_amount": "120.00",
+      "amount_per_participant": "0.00",
+      "pix_key": "email@exemplo.com",
+      "status": "open",
+      "public_hash": "…",
+      "charges": []
+    }
+  }
+}
+```
 
 ---
 
-## Público — `v1`
+## Charges — validação autenticada
 
-### `GET /api/v1/public/expenses/{hash}`
+| Método | Rota |
+|--------|------|
+| `PATCH` | `/api/v1/charges/{charge}/validate` |
+| `PATCH` | `/api/v1/charges/{charge}/reject` |
+| `GET` | `/api/v1/charges/{charge}/proof` |
 
-Query opcional: `manage={manage_token}` — com token correto, `participants` lista cada cobrança (`charge_id`, `charge_status`, `amount`, nome, telefone). Sem token, `participants` traz apenas nome + status (visão mínima). Campo monetário médio: **`amount_per_participant`** (coluna homônima em `expenses`).
-
-**404** — hash inexistente (envelope `NOT_FOUND`).
-
-### `POST /api/v1/public/expenses/{hash}/validate-participant`
-
-Body: `name`, `phone` (normalizados no backend).
-
-**200** — envelope com `status`, `rejection_reason`, `can_submit_proof`.  
-**422** — `PARTICIPANT_NOT_FOUND` se nome/telefone não batem.
-
-### `POST /api/v1/public/expenses/{hash}/submit-proof`
-
-`multipart/form-data`: `name`, `phone`, `proof` (arquivo).  
-Validação forte no servidor (tipo/tamanho/conteúdo).
-
-### Gestão pública (requer `manage` ou header)
-
-- `PATCH /api/v1/public/expenses/{hash}` — atualizar valor/Pix (regras de estado).
-- `PATCH /api/v1/public/expenses/{hash}/close` — fechar despesa.
-- `POST /api/v1/public/expenses/{hash}/participants` — adicionar participantes.
-- `PATCH /api/v1/public/charges/{charge}/validate` | `/reject`
-- `GET /api/v1/public/charges/{charge}/proof` — download
-
-**403** — `manage_token` ausente ou inválido.
+**Reject:** enviar corpo com campo de motivo conforme `RejectChargeRequest` (ex.: `reason`), limitado no servidor.
 
 ---
 
-## Erros comuns
+## Público — criar cobrança sem login
 
-| HTTP | code (exemplo) | Quando |
-|------|------------------|--------|
-| 401 | UNAUTHENTICATED | Bearer inválido/ausente |
-| 403 | FORBIDDEN | Sem permissão / manage inválido |
-| 404 | NOT_FOUND | Recurso inexistente ou escopo errado |
-| 422 | VALIDATION_ERROR / domínio | Validação ou regra de negócio |
+| Método | Rota |
+|--------|------|
+| `POST` | `/api/public/expenses` |
+
+Rota **sem** o segmento `v1`. Cria `Expense` com participantes; resposta em envelope com dados resumidos da cobrança (incl. links/tokens conforme resource).
 
 ---
 
-## Compatibilidade com o frontend
+## Público — consultar e operar por hash (`v1`)
 
-- Envelope: `unwrapEnvelope` em `client.ts` aceita resposta com ou sem envelope em alguns casos legadas.
-- Rotas públicas de identificação e upload **não** devem enviar Bearer (implementação atual usa `fetch` sem auth ou `publicV1Fetch` para não vazar token nem disparar logout global em 401).
+Prefixo: **`/api/v1/public`**.
+
+| Método | Rota |
+|--------|------|
+| `GET` | `/api/v1/public/expenses/{hash}` |
+| `PATCH` | `/api/v1/public/expenses/{hash}` |
+| `PATCH` | `/api/v1/public/expenses/{hash}/close` |
+| `POST` | `/api/v1/public/expenses/{hash}/participants` |
+| `POST` | `/api/v1/public/expenses/{hash}/validate-participant` |
+| `POST` | `/api/v1/public/expenses/{hash}/submit-proof` |
+| `PATCH` | `/api/v1/public/charges/{charge}/validate` |
+| `PATCH` | `/api/v1/public/charges/{charge}/reject` |
+| `GET` | `/api/v1/public/charges/{charge}/proof` |
+
+**Gestão:** query `?manage={manage_token}` ou header **`X-Manage-Token`**. Comparação segura no servidor (`hash_equals`). Sem token válido, operações de gestão retornam **403**.
+
+**GET despesa pública:** com `manage` correto, `participants` pode incluir por cobrança: `charge_id`, `charge_status`, `amount`, nome, telefone; sem manage, visão mínima (ex.: nome + status). Campo **`amount_per_participant`** na despesa quando exposto.
+
+**validate-participant:** body `name`, `phone`.  
+**submit-proof:** `multipart/form-data` com `name`, `phone`, `proof` (arquivo).
+
+---
+
+## Códigos HTTP frequentes
+
+| HTTP | code (exemplo) | Situação |
+|------|----------------|----------|
+| 401 | `UNAUTHENTICATED` | Bearer inválido ou ausente |
+| 403 | `FORBIDDEN` | Sem permissão ou token de gestão inválido |
+| 404 | `NOT_FOUND` | Recurso inexistente |
+| 422 | `VALIDATION_ERROR` / domínio | Validação ou regra de negócio |
+
+---
+
+## Frontend / CORS
+
+Rotas públicas de identificação e upload **não** devem enviar `Authorization: Bearer` do organizador (evita misturar sessão do painel com fluxo do participante). Ver implementação em `frontend/src/lib/api/client.ts` (`publicV1Fetch`, `fetch` dedicados).

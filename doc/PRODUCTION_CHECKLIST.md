@@ -1,64 +1,65 @@
 # Checklist de produção
 
-Use antes de liberar ambiente público.
+Antes de expor o ambiente publicamente.
 
 ## Aplicação Laravel
 
 - [ ] `APP_ENV=production`
 - [ ] `APP_DEBUG=false`
-- [ ] `APP_KEY` definida (`php artisan key:generate` já executado uma vez)
+- [ ] `APP_KEY` definida (`php artisan key:generate` em setup seguro)
 - [ ] `APP_URL` com HTTPS e domínio final
-- [ ] MySQL: credenciais fortes; banco criado com `utf8mb4_unicode_ci`
-- [ ] `php artisan migrate --force` aplicado
-- [ ] `php artisan config:cache` e `route:cache` (se aplicável ao deploy)
+- [ ] MySQL: credenciais fortes; charset `utf8mb4_unicode_ci`
+- [ ] `php artisan migrate --force`
+- [ ] `php artisan config:cache` e `php artisan route:cache` quando fizer sentido ao deploy
 
-## Segurança HTTP
+## Segurança HTTP e API
 
 - [ ] HTTPS obrigatório (redirect 80 → 443)
-- [ ] `CORS_ALLOWED_ORIGINS` **sem** `*`; apenas origens do frontend
-- [ ] Headers de segurança ativos na API (`SecurityHeaders` + config nginx)
-- [ ] Rate limits ativos (Laravel + opcional WAF/Cloudflare)
+- [ ] `CORS_ALLOWED_ORIGINS` **sem** `*`; apenas origens reais do frontend
+- [ ] Headers de segurança na API (`SecurityHeaders` + Nginx)
+- [ ] Rate limits Laravel ativos; considerar camada na borda (WAF / Cloudflare)
 
 ## Storage e uploads
 
-- [ ] `storage/app` (ou disco de comprovantes) **fora** de document root ou com `.htaccess`/rules que impeçam execução PHP
-- [ ] `php artisan storage:link` se usar disco `public` para assets permitidos
-- [ ] Permissões de arquivo adequadas ao usuário do PHP-FPM
+- [ ] Comprovantes em `storage/app` (ou disco dedicado): sem execução de PHP sob o path servido
+- [ ] `php artisan storage:link` se usar disco `public` para assets estáticos
+- [ ] Permissões adequadas ao usuário do PHP-FPM
+- [ ] Política de retenção / exclusão de arquivos (LGPD)
 
-## Filas e jobs
+## Filas e workers
 
-- [ ] `QUEUE_CONNECTION` não `sync` em produção se houver jobs pesados
-- [ ] Worker supervisado (systemd/supervisor)
-- [ ] Redis/credenciais seguras se usados
+- [ ] `QUEUE_CONNECTION` adequado (não `sync` se houver jobs assíncronos)
+- [ ] Worker supervisado (systemd / supervisor / container dedicado)
+- [ ] Credenciais Redis seguras se aplicável
 
 ## Logs e monitoramento
 
-- [ ] `LOG_LEVEL` adequado (`error` ou `warning` em prod)
-- [ ] Sem logar tokens, `manage_token`, telefones completos ou conteúdo de comprovantes
-- [ ] Alertas (Sentry, CloudWatch, etc.) opcionais
+- [ ] `LOG_LEVEL` (`error` / `warning` em produção)
+- [ ] Não logar tokens, `manage_token`, PII sensível nem conteúdo de comprovantes
+- [ ] Alertas (Sentry, CloudWatch, etc.) conforme política da operação
 
 ## Frontend
 
-- [ ] `npm ci && npm run build` no diretório `frontend`
-- [ ] Artefatos presentes em `public/spa/`
-- [ ] `VITE_*` de build apontando para API pública correta
-- [ ] Source maps: avaliar exposição (pode desabilitar ou restringir)
+- [ ] `npm ci && npm run build` em `frontend/`
+- [ ] Artefatos em `public/spa/` versionados ou gerados na pipeline
+- [ ] `VITE_API_BASE_URL` (ou URLs relativas) apontando para a API pública correta **no momento do build**
+- [ ] Avaliar exposição de source maps
 
-## Dados e backup
+## Backups e dados
 
-- [ ] Backup automático do MySQL
-- [ ] Política de retenção de comprovantes / LGPD
+- [ ] Backup automático do MySQL (e testes de restore)
+- [ ] Política de retenção documentada
 
-## Qualidade
+## Qualidade e dependências
 
-- [ ] `php artisan test` passando na CI
+- [ ] `php artisan test` na CI
 - [ ] `composer audit` sem vulnerabilidades críticas não mitigadas
-- [ ] `npm audit` revisado (muitas issues podem ser só devDependencies)
+- [ ] `npm audit` revisado (muitos achados podem ser só devDependencies)
 
-## Pós-deploy smoke test
+## Smoke test pós-deploy
 
-- [ ] Registro/login
-- [ ] Criar despesa e participantes
-- [ ] Link público abre; identificação e upload
-- [ ] Validar/rejeitar comprovante
-- [ ] Fechar despesa quando todos validados
+- [ ] Registro / login
+- [ ] Criar cobrança e participantes
+- [ ] Link público; identificar participante e upload
+- [ ] Validar / rejeitar comprovante
+- [ ] Fechar despesa quando todas as cobranças validadas

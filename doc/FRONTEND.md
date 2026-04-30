@@ -49,6 +49,15 @@ npm run dev
 npm run build          # gera public/spa
 ```
 
+## Testes
+
+Scripts em `frontend/package.json`:
+
+```bash
+npm run test          # Vitest, modo run único (CI)
+npm run test:watch    # Vitest interativo
+```
+
 ## Boas práticas
 
 - Preferir texto vindo da API como filhos de React (escapado), não `dangerouslySetInnerHTML`.

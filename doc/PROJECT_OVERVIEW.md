@@ -2,47 +2,53 @@
 
 ## O que é
 
-**Conta Fácil** (marca na UI também como **ContaCerta Pix**) é um organizador de **cobranças compartilhadas via Pix**: um criador define um valor total, divide entre participantes, informa a chave Pix e compartilha um **link público**. Cada participante identifica-se (nome + telefone), vê sua fatia, paga no app do banco e envia **comprovante**; o organizador **valida ou rejeita** o comprovante.
+**ContaCerta Pix** (nome na UI; repositório também chamado **Conta Fácil**) organiza **cobranças compartilhadas via Pix**: o criador define um valor total, divide entre **participantes**, informa a chave Pix e compartilha um **link público**. Cada participante informa nome e telefone, vê o valor da sua parte, paga no app do banco e envia **comprovante**; o criador **aprova ou rejeita** no painel ou via link de gestão.
 
 ## Problema que resolve
 
-- Evita planilhas e cobranças manuais no WhatsApp sem controle de quem pagou.
-- Um único link público por cobrança, com visão mínima para o participante e visão de gestão para quem tem o token de organizador.
+- Reduz planilhas e cobranças soltas sem status de quem já pagou.
+- Um link por cobrança: visão enxuta para quem paga e visão de gestão para quem tem o token do organizador.
 
-## Principais fluxos
+## Quem usa
 
-1. **Registro/login** (API Sanctum).
-2. **Criação de cobrança** (usuário logado: `POST /expenses` + participantes; ou fluxo público sem conta) → `ExpenseParticipant` + `charges`.
-3. **Link público** `/p/{public_hash}` → participante informa nome/telefone → API confere participante na despesa.
-4. **Pagamento** fora do sistema (Pix) → upload de comprovante.
-5. **Validação/rejeição** (painel autenticado ou rotas públicas com `manage_token`) → transição de status.
-6. **Fechamento da despesa** quando todas as cobranças estão `validated` (e regras de negócio atendidas).
+- **Organizador:** conta registrada (Sanctum) ou fluxo pontual sem conta (`POST /api/public/expenses`).
+- **Participante:** qualquer pessoa com o link público; identifica-se com nome + telefone para ver status e enviar comprovante.
+
+## Fluxo principal
+
+1. Registro / login (quando usar conta).
+2. Criação da cobrança e inclusão de participantes (`ExpenseParticipant` + `Charge`).
+3. Compartilhamento do link `/p/{public_hash}`.
+4. Pagamento Pix **fora** do sistema.
+5. Upload do comprovante pelo participante.
+6. Validação ou rejeição pelo criador (autenticado ou rotas públicas com `manage_token`).
+7. Encerramento da despesa quando todas as cobranças estão validadas (conforme regras de negócio).
 
 ## Entidades principais
 
 | Entidade | Papel |
 |----------|--------|
 | `User` | Organizador autenticado |
-| `Expense` | Cobrança/despesa; `public_hash`, `manage_token`, Pix, total, vencimento, status; `created_by` opcional (fluxo público anônimo) |
+| `Expense` | Cobrança; Pix, total, vencimento, `public_hash`, `manage_token`, status; `created_by` opcional no fluxo anônimo |
 | `ExpenseParticipant` | Snapshot do participante **nesta** cobrança (nome, telefone, valor) |
-| `Charge` | Valor devido ao participante; `expense_participant_id`; JSON da API com **`participant`** |
-| `PaymentProof` | Arquivo de comprovante ligado à cobrança |
+| `Charge` | Valor devido; ligado a um participante; na API aparece como **`participant`** |
+| `PaymentProof` | Arquivo do comprovante |
 
-Modelagem: **`User → Expense → ExpenseParticipant → Charge → PaymentProof`**.
+**Cadeia:** `User → Expense → ExpenseParticipant → Charge → PaymentProof`.
 
 ## Status da cobrança (`Charge`)
 
-| API | UI (exemplo) |
-|-----|----------------|
-| `pending` | Pendente |
+| API | Significado |
+|-----|-------------|
+| `pending` | Aguardando comprovante |
 | `proof_sent` | Comprovante enviado |
-| `validated` | Pago |
-| `rejected` | Rejeitado |
+| `validated` | Pagamento confirmado pelo organizador |
+| `rejected` | Comprovante recusado |
 
-A despesa (`Expense`) tem também status agregado (ex.: `open`, `closed`) conforme migrations e serviços.
+A despesa (`Expense`) agrega status (ex.: `open`, `closed`) conforme regras do backend.
 
 ## Visão de produto
 
-- **MVP forte** em fluxo público + gestão por link com `?manage=`.
-- **SaaS**: multi-usuário por equipe, autenticação Bearer, CORS para SPA separada em dev.
-- **Pix** hoje é **manual** (chave + cópia); não há gateway de pagamento integrado.
+- Forte suporte a **fluxo público** + gestão com `?manage=` / `X-Manage-Token`.
+- **Multi-usuário:** cada conta vê apenas cobranças próprias (`created_by`).
+- **Pix manual** no MVP (chave + QR opcional copiado); sem gateway de liquidação integrado.
