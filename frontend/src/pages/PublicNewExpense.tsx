@@ -7,7 +7,8 @@ import {
     buildPublicManageLink,
     parseManageTokenFromManageUrl,
 } from "@/lib/format";
-import { digitsOnly, formatBrazilPhoneDisplay } from "@/lib/inputMasks";
+import { CurrencyBrInput } from "@/components/CurrencyBrInput";
+import { digitsOnly, formatBrazilPhoneDisplay, parseMoneyInput } from "@/lib/inputMasks";
 import { setPublicManageToken } from "@/lib/publicManageToken";
 import { ArrowLeft, Plus } from "lucide-react";
 
@@ -48,7 +49,7 @@ export default function PublicNewExpense() {
         ownerDigits.length >= 10 &&
         description.trim().length > 0 &&
         pixKey.trim().length > 0 &&
-        Number(amountStr.replace(",", ".")) >= 1 &&
+        parseMoneyInput(amountStr) >= 1 &&
         participants.some(
             (p) =>
                 p.name.trim().length > 0 &&
@@ -59,7 +60,7 @@ export default function PublicNewExpense() {
         e.preventDefault();
         setError(null);
         if (!canSubmit) return;
-        const amt = Number(amountStr.replace(",", ".").replace(/[^\d.]/g, ""));
+        const amt = parseMoneyInput(amountStr);
         const plist = participants
             .filter(
                 (p) =>
@@ -283,13 +284,9 @@ export default function PublicNewExpense() {
                         <span className="text-xs font-bold uppercase tracking-widest">
                             Valor total (R$)
                         </span>
-                        <input
-                            className="brutal-input tabular-nums"
-                            inputMode="decimal"
+                        <CurrencyBrInput
                             value={amountStr}
-                            onChange={(e) => setAmountStr(e.target.value)}
-                            placeholder="120.00"
-                            required
+                            onValueChange={setAmountStr}
                         />
                     </label>
                     <label className="flex flex-col gap-1.5">

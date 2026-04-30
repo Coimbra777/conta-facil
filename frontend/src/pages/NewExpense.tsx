@@ -8,7 +8,6 @@ import { formatBRL } from "@/lib/format";
 import {
     digitsOnly,
     formatBrazilPhoneDisplay,
-    maskMoneyTyping,
     parseMoneyInput,
 } from "@/lib/inputMasks";
 import {
@@ -17,6 +16,7 @@ import {
     splitTotalEquallyInReais,
     validateExpenseParticipantsPayload,
 } from "@/lib/splitAmountEqually";
+import { CurrencyBrInput } from "@/components/CurrencyBrInput";
 import { Plus, Trash2, Wand2 } from "lucide-react";
 
 interface DraftParticipant {
@@ -172,15 +172,10 @@ export default function NewExpense() {
                                     <textarea className="brutal-input" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Detalhes do que está sendo cobrado." />
                                 </Field>
                                 <div className="grid sm:grid-cols-2 gap-4">
-                                    <Field label="Valor total">
-                                        <input
-                                            className="brutal-input"
-                                            inputMode="decimal"
+                                    <Field label="Valor total (R$)">
+                                        <CurrencyBrInput
                                             value={totalAmount}
-                                            onChange={(e) =>
-                                                setTotalAmount(maskMoneyTyping(e.target.value))
-                                            }
-                                            placeholder="0,00"
+                                            onValueChange={setTotalAmount}
                                         />
                                     </Field>
                                     <Field label="Data limite (opcional)">
@@ -254,16 +249,13 @@ export default function NewExpense() {
                                                     />
                                                 </Field>
                                                 <Field label="Valor (R$)">
-                                                    <input
-                                                        className="brutal-input"
-                                                        inputMode="decimal"
+                                                    <CurrencyBrInput
                                                         value={p.amount}
-                                                        onChange={(e) =>
+                                                        onValueChange={(v) =>
                                                             updateP(p.id, {
-                                                                amount: maskMoneyTyping(e.target.value),
+                                                                amount: v,
                                                             })
                                                         }
-                                                        placeholder="0,00"
                                                     />
                                                 </Field>
                                             </div>
