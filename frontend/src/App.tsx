@@ -14,6 +14,7 @@ import ExpenseDetail from "./pages/ExpenseDetail.tsx";
 import ExpenseSuccess from "./pages/ExpenseSuccess.tsx";
 import PublicExpense from "./pages/PublicExpense.tsx";
 import PublicCreateExpenseStandby from "./pages/PublicCreateExpenseStandby.tsx";
+import Demo from "./pages/Demo.tsx";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
                         <Route path="/cobrancas/:id" element={<ProtectedRoute><ExpenseDetail /></ProtectedRoute>} />
                         <Route path="/cobrancas/:id/sucesso" element={<ProtectedRoute><ExpenseSuccess /></ProtectedRoute>} />
 
+                        <Route path="/demo" element={<Demo />} />
                         <Route path="/p/:hash" element={<PublicExpense />} />
                         <Route path="/cobranca-publica/nova" element={<PublicCreateExpenseStandby />} />
 

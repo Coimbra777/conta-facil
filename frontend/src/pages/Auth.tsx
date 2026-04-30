@@ -257,6 +257,15 @@ export default function AuthPage({ mode }: Props) {
                             <>Novo por aqui? <Link to="/cadastro" className="font-bold text-foreground underline">Criar conta</Link></>
                         )}
                     </p>
+
+                    <p className="text-sm text-center mt-4">
+                        <Link
+                            to="/demo"
+                            className="font-bold text-foreground underline underline-offset-4 decoration-dashed"
+                        >
+                            Explorar o sistema sem cadastro
+                        </Link>
+                    </p>
                 </div>
             </main>
 

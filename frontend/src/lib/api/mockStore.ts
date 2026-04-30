@@ -92,6 +92,11 @@ const seedExpense = (): Expense => ({
     ],
 });
 
+/** Snapshot só para UI da página /demo (mesmos dados do seed persistido). */
+export function getDemoPresentationSeedExpense(): Expense {
+    return seedExpense();
+}
+
 function load(): DB {
     try {
         const raw = localStorage.getItem(LS_KEY);

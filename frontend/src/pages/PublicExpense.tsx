@@ -29,8 +29,17 @@ import { CheckCircle2, Clock, Smartphone, AlertTriangle } from "lucide-react";
 const IDENTIFY_ERROR_MAIN =
     "Não encontramos esses dados nesta cobrança. Confira o nome e telefone ou fale com o organizador.";
 
-export default function PublicExpense() {
-    const { hash = "" } = useParams();
+export type PublicExpenseProps = {
+    /** Usado em `/demo`: mesma UI do participante sem depender da rota `/p/:hash`. */
+    embeddedDemoHash?: string;
+};
+
+export default function PublicExpense({
+    embeddedDemoHash,
+}: PublicExpenseProps = {}) {
+    const { hash: routeHash = "" } = useParams();
+    const hash = embeddedDemoHash ?? routeHash;
+    const embedInDemoPage = Boolean(embeddedDemoHash);
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [exp, setExp] = useState<Expense | null | undefined>(undefined);
@@ -152,14 +161,14 @@ export default function PublicExpense() {
 
     if (exp === undefined) {
         return (
-            <PublicShell>
+            <PublicShell fillViewport={!embedInDemoPage}>
                 <div className="p-8 text-center">Carregando…</div>
             </PublicShell>
         );
     }
     if (!exp) {
         return (
-            <PublicShell>
+            <PublicShell fillViewport={!embedInDemoPage}>
                 <div className="p-8 text-center">
                     <h1 className="font-display text-3xl uppercase mb-2">
                         Link inválido
@@ -174,7 +183,7 @@ export default function PublicExpense() {
     }
 
     return (
-        <PublicShell>
+        <PublicShell fillViewport={!embedInDemoPage}>
             <header className="px-5 sm:px-6 pt-6 sm:pt-8 pb-6 border-b-4 border-foreground bg-arcade-yellow">
                 <div className="max-w-md mx-auto flex flex-col gap-4">
                     <BackToHomeLink />
@@ -536,9 +545,18 @@ function BackToHomeLink({ className = "" }: { className?: string }) {
     );
 }
 
-function PublicShell({ children }: { children: React.ReactNode }) {
+function PublicShell({
+    children,
+    fillViewport = true,
+}: {
+    children: React.ReactNode;
+    /** Quando false, uso embutido em `/demo` sem forçar altura da viewport inteira. */
+    fillViewport?: boolean;
+}) {
     return (
-        <div className="min-h-dvh bg-background flex flex-col">
+        <div
+            className={`bg-background flex flex-col ${fillViewport ? "min-h-dvh" : "min-h-0 flex-1"}`}
+        >
             <div className="border-b-4 border-foreground bg-foreground text-background">
                 <div className="max-w-md mx-auto px-5 py-3 flex items-center gap-2">
                     <span className="size-5 rounded-full bg-accent border-2 border-background" />
