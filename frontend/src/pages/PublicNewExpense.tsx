@@ -13,7 +13,12 @@ import {
     parseManageTokenFromManageUrl,
 } from "@/lib/format";
 import { CurrencyBrInput } from "@/components/CurrencyBrInput";
-import { digitsOnly, formatBrazilPhoneDisplay, parseMoneyInput } from "@/lib/inputMasks";
+import {
+    digitsOnly,
+    formatBrazilPhoneDisplay,
+    GENERIC_BRAZIL_PHONE_PLACEHOLDER,
+    parseMoneyInput,
+} from "@/lib/inputMasks";
 import { setPublicManageToken } from "@/lib/publicManageToken";
 import { ArrowLeft, Plus } from "lucide-react";
 
@@ -270,6 +275,7 @@ export default function PublicNewExpense() {
                                     formatBrazilPhoneDisplay(e.target.value),
                                 )
                             }
+                            placeholder={GENERIC_BRAZIL_PHONE_PLACEHOLDER}
                             required
                         />
                     </label>
@@ -387,6 +393,9 @@ export default function PublicNewExpense() {
                                                         : r,
                                                 ),
                                             )
+                                        }
+                                        placeholder={
+                                            GENERIC_BRAZIL_PHONE_PLACEHOLDER
                                         }
                                     />
                                 </label>

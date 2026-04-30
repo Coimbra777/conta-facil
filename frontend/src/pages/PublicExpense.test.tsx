@@ -5,6 +5,7 @@ import PublicExpense from "./PublicExpense";
 import { api, isPublicExpenseUsingMock } from "@/lib/api/client";
 import type { Expense } from "@/lib/types";
 import { DEMO_PRESENTATION_PUBLIC_HASH } from "@/lib/api/mockStore";
+import { GENERIC_BRAZIL_PHONE_PLACEHOLDER } from "@/lib/inputMasks";
 
 const IDENTIFY_SNIPPET = /Não encontramos esses dados nesta cobrança/i;
 
@@ -75,11 +76,40 @@ describe("PublicExpense", () => {
         vi.spyOn(api, "getPublicExpense").mockResolvedValue(baseExpense());
         renderRoute("/p/other-hash");
         await waitFor(() =>
-            expect(screen.getByPlaceholderText("(98) 97013-0666")).toBeInTheDocument(),
+            expect(
+                screen.getByPlaceholderText(
+                    GENERIC_BRAZIL_PHONE_PLACEHOLDER,
+                ),
+            ).toBeInTheDocument(),
         );
-        const tel = screen.getByPlaceholderText("(98) 97013-0666");
-        fireEvent.change(tel, { target: { value: "98970130666" } });
-        expect(tel).toHaveValue("(98) 97013-0666");
+        const tel = screen.getByPlaceholderText(
+            GENERIC_BRAZIL_PHONE_PLACEHOLDER,
+        );
+        fireEvent.change(tel, { target: { value: "11999999999" } });
+        expect(tel).toHaveValue(GENERIC_BRAZIL_PHONE_PLACEHOLDER);
+    });
+
+    it("public participant view keeps organizer copy generic even with real name", async () => {
+        vi.spyOn(api, "getPublicExpense").mockResolvedValue(
+            baseExpense({ organizerName: "Org" }),
+        );
+        renderRoute("/p/other-hash");
+        await waitFor(() =>
+            expect(
+                screen.getByText(/Organizado pelo responsável da cobrança/i),
+            ).toBeInTheDocument(),
+        );
+        expect(screen.queryByText(/Organizado por Org/i)).not.toBeInTheDocument();
+    });
+
+    it("manage mode can render the real organizer name", async () => {
+        vi.spyOn(api, "getPublicExpense").mockResolvedValue(
+            baseExpense({ organizerName: "Org", canManage: true }),
+        );
+        renderRoute("/p/other-hash");
+        await waitFor(() =>
+            expect(screen.getByText(/Organizado por Org/i)).toBeInTheDocument(),
+        );
     });
 
     it("does not render the repeated organizer fallback copy", async () => {
@@ -111,15 +141,15 @@ describe("PublicExpense", () => {
         fireEvent.change(screen.getByPlaceholderText("Ex.: Marina Reis"), {
             target: { value: "Gabriel" },
         });
-        fireEvent.change(screen.getByPlaceholderText("(98) 97013-0666"), {
-            target: { value: "98970130666" },
+        fireEvent.change(screen.getByPlaceholderText(GENERIC_BRAZIL_PHONE_PLACEHOLDER), {
+            target: { value: "11999999999" },
         });
         fireEvent.click(screen.getByRole("button", { name: /Ver meu pagamento/i }));
         await waitFor(() => expect(spy).toHaveBeenCalled());
         expect(spy).toHaveBeenCalledWith(
             DEMO_PRESENTATION_PUBLIC_HASH,
             "Gabriel",
-            "98970130666",
+            "11999999999",
             null,
         );
     });
@@ -136,8 +166,8 @@ describe("PublicExpense", () => {
         fireEvent.change(screen.getByPlaceholderText("Ex.: Marina Reis"), {
             target: { value: "Gabriel" },
         });
-        fireEvent.change(screen.getByPlaceholderText("(98) 97013-0666"), {
-            target: { value: "98970130666" },
+        fireEvent.change(screen.getByPlaceholderText(GENERIC_BRAZIL_PHONE_PLACEHOLDER), {
+            target: { value: "11999999999" },
         });
         fireEvent.click(screen.getByRole("button", { name: /Ver meu pagamento/i }));
         await waitFor(() =>
@@ -160,8 +190,8 @@ describe("PublicExpense", () => {
         fireEvent.change(screen.getByPlaceholderText("Ex.: Marina Reis"), {
             target: { value: "Gabriel" },
         });
-        fireEvent.change(screen.getByPlaceholderText("(98) 97013-0666"), {
-            target: { value: "98970130666" },
+        fireEvent.change(screen.getByPlaceholderText(GENERIC_BRAZIL_PHONE_PLACEHOLDER), {
+            target: { value: "11999999999" },
         });
         fireEvent.click(screen.getByRole("button", { name: /Ver meu pagamento/i }));
         await waitFor(() =>

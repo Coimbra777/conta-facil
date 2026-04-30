@@ -3,6 +3,8 @@ export function digitsOnly(s: string): string {
     return s.replace(/\D/g, "");
 }
 
+export const GENERIC_BRAZIL_PHONE_PLACEHOLDER = "(11) 99999-9999";
+
 /** Telefone BR: (DD) 99999-9999 ou (DD) 3333-4444. */
 export function formatBrazilPhoneDisplay(input: string): string {
     const d = digitsOnly(input).slice(0, 11);

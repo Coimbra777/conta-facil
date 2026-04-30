@@ -19,7 +19,11 @@ import {
     formatDate,
     isDueDateBeforeToday,
 } from "@/lib/format";
-import { digitsOnly, formatBrazilPhoneDisplay } from "@/lib/inputMasks";
+import {
+    digitsOnly,
+    formatBrazilPhoneDisplay,
+    GENERIC_BRAZIL_PHONE_PLACEHOLDER,
+} from "@/lib/inputMasks";
 import {
     getPublicManageToken,
     setPublicManageToken,
@@ -29,12 +33,14 @@ import { CheckCircle2, Clock, Smartphone, AlertTriangle } from "lucide-react";
 const IDENTIFY_ERROR_MAIN =
     "Não encontramos esses dados nesta cobrança. Confira o nome e telefone ou fale com o organizador.";
 
-function organizerCopy(name: string): string {
+function organizerCopy(name: string, canManage = false): string {
     const trimmed = name.trim();
 
-    return trimmed
-        ? `Organizado por ${trimmed}`
-        : "Organizado pelo responsável da cobrança";
+    if (canManage && trimmed) {
+        return `Organizado por ${trimmed}`;
+    }
+
+    return "Organizado pelo responsável da cobrança";
 }
 
 export type PublicExpenseProps = {
@@ -203,7 +209,7 @@ export default function PublicExpense({
                             {exp.title}
                         </h1>
                         <p className="text-sm font-bold mt-2">
-                            {organizerCopy(exp.organizerName)}
+                            {organizerCopy(exp.organizerName, exp.canManage)}
                         </p>
                         {exp.description && (
                             <p className="text-sm mt-1 opacity-80">
@@ -372,7 +378,7 @@ export default function PublicExpense({
                                     );
                                     setIdentifyError(null);
                                 }}
-                                placeholder="(98) 97013-0666"
+                                placeholder={GENERIC_BRAZIL_PHONE_PLACEHOLDER}
                             />
                         </label>
                         {identifyError && (

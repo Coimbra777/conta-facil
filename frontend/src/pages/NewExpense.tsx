@@ -8,6 +8,7 @@ import { formatBRL } from "@/lib/format";
 import {
     digitsOnly,
     formatBrazilPhoneDisplay,
+    GENERIC_BRAZIL_PHONE_PLACEHOLDER,
     parseMoneyInput,
 } from "@/lib/inputMasks";
 import {
@@ -253,7 +254,9 @@ export default function NewExpense() {
                                                                 ),
                                                             })
                                                         }
-                                                        placeholder="(11) 98765-4321"
+                                                        placeholder={
+                                                            GENERIC_BRAZIL_PHONE_PLACEHOLDER
+                                                        }
                                                         autoComplete="tel"
                                                     />
                                                 </Field>

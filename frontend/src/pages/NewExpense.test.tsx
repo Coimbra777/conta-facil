@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import NewExpense from "./NewExpense";
 import { AuthProvider } from "@/lib/auth";
 import { api } from "@/lib/api/client";
+import { GENERIC_BRAZIL_PHONE_PLACEHOLDER } from "@/lib/inputMasks";
 
 function renderPage() {
     return render(
@@ -107,5 +108,30 @@ describe("NewExpense summary", () => {
                 screen.getByText(/Os valores estão balanceados\./i),
             ).toBeInTheDocument(),
         );
+    });
+
+    it("uses the generic placeholder in participant phone fields", async () => {
+        renderPage();
+
+        expect(await screen.findByText(/Nova cobrança/i)).toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText(/Título/i), {
+            target: { value: "Churrasco" },
+        });
+        fireEvent.change(screen.getByLabelText(/Valor total/i), {
+            target: { value: "100,00" },
+        });
+        fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+        fireEvent.change(screen.getByPlaceholderText(/Sua chave Pix/i), {
+            target: { value: "pix@teste.com" },
+        });
+        fireEvent.change(screen.getByLabelText(/Nome do recebedor/i), {
+            target: { value: "ContaCerta" },
+        });
+        fireEvent.click(screen.getByRole("button", { name: /Continuar/i }));
+
+        const phoneInputs = await screen.findAllByPlaceholderText(
+            GENERIC_BRAZIL_PHONE_PLACEHOLDER,
+        );
+        expect(phoneInputs.length).toBeGreaterThan(0);
     });
 });

@@ -1,13 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { digitsOnly, formatBrazilPhoneDisplay } from "./inputMasks";
+import {
+    digitsOnly,
+    formatBrazilPhoneDisplay,
+    GENERIC_BRAZIL_PHONE_PLACEHOLDER,
+} from "./inputMasks";
 
 describe("formatBrazilPhoneDisplay", () => {
     it("formats progressive typing", () => {
         expect(formatBrazilPhoneDisplay("9")).toBe("(9");
-        expect(formatBrazilPhoneDisplay("98")).toBe("(98");
-        expect(formatBrazilPhoneDisplay("989")).toBe("(98) 9");
-        expect(formatBrazilPhoneDisplay("9897013")).toBe("(98) 9701-3");
-        expect(formatBrazilPhoneDisplay("98970130666")).toBe("(98) 97013-0666");
+        expect(formatBrazilPhoneDisplay("11")).toBe("(11");
+        expect(formatBrazilPhoneDisplay("119")).toBe("(11) 9");
+        expect(formatBrazilPhoneDisplay("1199999")).toBe("(11) 9999-9");
+        expect(formatBrazilPhoneDisplay("11999999999")).toBe(
+            GENERIC_BRAZIL_PHONE_PLACEHOLDER,
+        );
     });
 
     it("formats 10-digit Brazilian numbers", () => {
@@ -15,17 +21,17 @@ describe("formatBrazilPhoneDisplay", () => {
     });
 
     it("strips non-digits and caps at 11", () => {
-        expect(formatBrazilPhoneDisplay("(98) 97013-0666")).toBe(
-            "(98) 97013-0666",
+        expect(formatBrazilPhoneDisplay(GENERIC_BRAZIL_PHONE_PLACEHOLDER)).toBe(
+            GENERIC_BRAZIL_PHONE_PLACEHOLDER,
         );
-        expect(formatBrazilPhoneDisplay("989701306661234")).toBe(
-            "(98) 97013-0666",
+        expect(formatBrazilPhoneDisplay("119999999991234")).toBe(
+            GENERIC_BRAZIL_PHONE_PLACEHOLDER,
         );
     });
 });
 
 describe("digitsOnly", () => {
     it("extracts digits for API payload", () => {
-        expect(digitsOnly("(98) 97013-0666")).toBe("98970130666");
+        expect(digitsOnly(GENERIC_BRAZIL_PHONE_PLACEHOLDER)).toBe("11999999999");
     });
 });
