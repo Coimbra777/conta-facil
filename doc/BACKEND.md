@@ -26,7 +26,9 @@ Autorização explícita em código: **`ExpenseAuthorizer`** (dono = `created_by
 ## Models principais
 
 - **User** — `hasMany` Expense via `created_by`
-- **Expense** — agrega Pix, totais, `public_hash`, `manage_token`, status
+- **Expense** — agrega Pix, totais, `public_hash`, `manage_token`, status; **`amount_per_participant`** persistido como valor igual por pessoa na divisão uniforme, ou **média** quando valores por charge são personalizados (**`average_amount_per_participant`** espelha o mesmo número na API).
+
+No MVP, **`due_date`** não impede envio de comprovante nem validação após o vencimento (campo informativo).
 - **ExpenseParticipant** — snapshot por despesa
 - **Charge** — `expense_id`, `expense_participant_id`, valor, status, datas
 - **PaymentProof** — arquivo ligado ao `Charge`

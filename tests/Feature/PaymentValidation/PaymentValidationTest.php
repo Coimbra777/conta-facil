@@ -111,16 +111,30 @@ class PaymentValidationTest extends TestCase
         [$admin, , , $charge2] = $this->createExpenseSetup();
 
         $response = $this->actingAs($admin, 'sanctum')
-            ->patchJson("/api/v1/charges/{$charge2->id}/reject");
+            ->patchJson("/api/v1/charges/{$charge2->id}/reject", [
+                'reason' => 'Valor divergente.',
+            ]);
 
         $response->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath('data.charge.status', 'rejected');
+            ->assertJsonPath('data.charge.status', 'rejected')
+            ->assertJsonPath('data.charge.rejection_reason', 'Valor divergente.');
 
         $this->assertDatabaseHas('charges', [
             'id' => $charge2->id,
             'status' => 'rejected',
         ]);
+    }
+
+    public function test_admin_reject_charge_requires_reason(): void
+    {
+        [$admin, , , $charge2] = $this->createExpenseSetup();
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/v1/charges/{$charge2->id}/reject", []);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['reason']);
     }
 
     public function test_expense_closes_when_all_charges_validated(): void
@@ -198,7 +212,9 @@ class PaymentValidationTest extends TestCase
 
         // Reject first
         $this->actingAs($admin, 'sanctum')
-            ->patchJson("/api/v1/charges/{$charge2->id}/reject");
+            ->patchJson("/api/v1/charges/{$charge2->id}/reject", [
+                'reason' => 'Motivo do teste.',
+            ]);
 
         $this->assertDatabaseHas('charges', ['id' => $charge2->id, 'status' => 'rejected']);
 

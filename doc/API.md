@@ -95,7 +95,13 @@ PATCH /api/v1/charges/{id}/reject
 GET   /api/v1/charges/{id}/proof
 ```
 
-`reject` envia corpo com motivo conforme validação do backend (ex.: campo `reason`).
+`reject` envia corpo **`reason` obrigatório** (string, máx. 2000 caracteres).
+
+---
+
+## Campos `amount_per_participant` e `average_amount_per_participant`
+
+Em **`Expense`** (JSON autenticado ou público com gestão): **`amount_per_participant`** é persistido pelo backend. Em **divisão igual**, coincide com o valor de cada cobrança; quando há **valores diferentes por participante**, o backend grava a **média aritmética** (total ÷ quantidade de cobranças) para referência agregada — **não** substitui o valor individual de cada `Charge`. O campo **`average_amount_per_participant`** espelha o mesmo número (alias documental).
 
 ---
 
@@ -107,7 +113,26 @@ POST /api/public/expenses
 
 Corpo validado pelo `StorePublicExpenseRequest` (despesa + lista de participantes). **Throttle** dedicado.
 
+**Resposta (201) — `data.expense` inclui:**
+
+- `participant_url` — URL absoluta do link **somente** para participantes (sem `manage_token`).
+- `manage_url` — mesma rota pública com fragmento `#manage={token}` para o SPA persistir o token (evite divulgar junto do link de participantes).
+- `manage_token` — *(legado / compatibilidade)* token cru; prefira `manage_url` na UI.
+
 ---
+
+### Duplicata de telefone (participantes autenticados)
+
+`POST /api/v1/expenses/{id}/participants` com **dois itens com o mesmo telefone normalizado** na mesma requisição → **422**, corpo:
+
+```json
+{
+  "success": false,
+  "message": "Já existe um participante com este telefone nesta despesa.",
+  "code": "DUPLICATE_PARTICIPANT",
+  "errors": {}
+}
+```
 
 ## Público — por hash (`v1`)
 
@@ -121,6 +146,14 @@ POST /api/v1/public/expenses/{hash}/validate-participant
 POST /api/v1/public/expenses/{hash}/submit-proof
 ```
 
+**GET público sem gestão:** a `expense` retorna apenas dados agregados (`participants_total_count`, `validated_charges_count`, `open_charges_count`, totais, Pix, etc.) — **sem** lista `participants` nem dados individuais.
+
+**GET com gestão válida:** mantém `participants` com nome/telefone/valores administrativos.
+
+**validate-participant** — JSON: `name`, `phone`; resposta inclui `status`, `can_submit_proof`, `amount`, `rejection_reason` quando aplicável.
+
+**due_date (MVP):** permanece **informativo** nas rotas públicas — não bloqueia comprovante nem validação após o vencimento.
+
 **Gestão** (exige `manage` na query ou header `X-Manage-Token`):
 
 ```txt
@@ -132,9 +165,9 @@ PATCH /api/v1/public/charges/{id}/reject
 GET   /api/v1/public/charges/{id}/proof
 ```
 
-**validate-participant** — JSON: `name`, `phone`.
-
 **submit-proof** — `multipart/form-data`: `name`, `phone`, `proof` (arquivo).
+
+**reject** (gestão pública ou painel): corpo com **`reason` obrigatório**.
 
 ---
 

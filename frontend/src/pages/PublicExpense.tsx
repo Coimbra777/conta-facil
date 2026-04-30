@@ -7,7 +7,14 @@ import { PixKeyBox } from "@/components/PixKeyBox";
 import { ProofUpload } from "@/components/ProofUpload";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CopyButton } from "@/components/CopyButton";
-import { formatBRL, initials, buildPublicLink } from "@/lib/format";
+import {
+    formatBRL,
+    initials,
+    buildPublicLink,
+    buildPublicManageLink,
+    formatDate,
+    isDueDateBeforeToday,
+} from "@/lib/format";
 import { digitsOnly, formatBrazilPhoneDisplay } from "@/lib/inputMasks";
 import {
     getPublicManageToken,
@@ -176,33 +183,66 @@ export default function PublicExpense() {
                                 {exp.description}
                             </p>
                         )}
+                        {typeof exp.participantsTotalCount === "number" &&
+                            exp.participantsTotalCount > 0 &&
+                            !participant && (
+                                <p className="text-sm font-bold mt-2 tabular-nums">
+                                    {exp.validatedChargesCount ?? 0} pago(s)
+                                    {" · "}
+                                    {exp.openChargesCount ?? 0} em aberto
+                                    {" · "}
+                                    {exp.participantsTotalCount} participante(s)
+                                </p>
+                            )}
                     </div>
                 </div>
             </header>
 
+            {(exp.status === "open" || exp.status === undefined) &&
+                isDueDateBeforeToday(exp.dueDate) && (
+                <div className="px-5 sm:px-6 pt-4 max-w-md mx-auto w-full">
+                    <div
+                        role="status"
+                        className="rounded-xl border-4 border-amber-600/50 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-50"
+                    >
+                            <span className="font-black uppercase text-xs tracking-widest block mb-1">
+                                Vencimento (informativo)
+                            </span>
+                            Esta cobrança tinha vencimento em{" "}
+                            <strong>{formatDate(exp.dueDate)}</strong>. No MVP o
+                            prazo não bloqueia pagamento nem envio de comprovante;
+                            combine com o organizador se precisar de mais tempo.
+                        </div>
+                    </div>
+                )}
+
             {exp.canManage ? (
                 <div className="px-5 sm:px-6 pt-4 max-w-md mx-auto w-full">
-                    <div className="rounded-xl border-2 border-dashed border-foreground/40 bg-muted/50 px-4 py-3 text-sm flex flex-col gap-3">
+                    <div className="rounded-xl border-4 border-dashed border-foreground/40 bg-muted/50 px-4 py-3 text-sm flex flex-col gap-3">
                         <p className="font-bold uppercase text-xs tracking-widest text-muted-foreground">
                             Modo organizador
                         </p>
                         <p className="leading-snug">
-                            Compartilhe apenas o{" "}
-                            <strong>link público</strong> com quem vai pagar. O{" "}
-                            <strong>token de gestão</strong> concede controle da
-                            cobrança — envie por canal privado (mensagem direta,
-                            cofre de senhas), nunca junto com o link público.
+                            Compartilhe o{" "}
+                            <strong>link para participantes</strong> com quem vai
+                            pagar (ele não contém o token de gestão). Guarde o{" "}
+                            <strong>link de gerenciamento</strong> em lugar seguro:
+                            com ele você aprova ou rejeita comprovantes. Se perder
+                            esse link, não há recuperação automática neste MVP.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
                             <CopyButton
                                 value={buildPublicLink(hash)}
-                                label="Copiar link público"
+                                label="Copiar link para participantes"
                                 className="flex-1 text-sm py-3"
                             />
                             {getPublicManageToken(hash) ? (
                                 <CopyButton
-                                    value={getPublicManageToken(hash)!}
-                                    label="Copiar token de gestão"
+                                    value={buildPublicManageLink(
+                                        hash,
+                                        getPublicManageToken(hash)!,
+                                    )}
+                                    label="Copiar link de gerenciamento"
                                     variant="ghost"
                                     className="flex-1 text-sm py-3"
                                 />
@@ -221,9 +261,21 @@ export default function PublicExpense() {
                         <h2 className="font-display text-xl uppercase">
                             Quem é você?
                         </h2>
-                        <p className="text-sm text-muted-foreground -mt-2 leading-snug">
-                            Digite o mesmo nome e telefone que o organizador
-                            usou na lista desta cobrança.
+                        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground -mt-2 leading-snug">
+                            Valor total da cobrança:{" "}
+                            <span className="text-foreground font-black">
+                                {formatBRL(exp.totalAmount)}
+                            </span>
+                            {exp.dueDate ? (
+                                <>
+                                    {" "}
+                                    · vencimento {formatDate(exp.dueDate)}
+                                </>
+                            ) : null}
+                        </p>
+                        <p className="text-sm text-muted-foreground leading-snug">
+                            Digite o mesmo nome e telefone que o organizador usou na
+                            lista desta cobrança.
                         </p>
                         <label className="flex flex-col gap-1.5">
                             <span className="text-xs font-bold uppercase tracking-widest">

@@ -12,7 +12,7 @@ class RejectChargeAction
     /**
      * @param  ChargeActionAudience::*  $audience
      */
-    public function execute(Charge $charge, ?string $reason, string $audience): Charge
+    public function execute(Charge $charge, string $reason, string $audience): Charge
     {
         $this->assertCanReject($charge, $audience);
 
@@ -71,14 +71,8 @@ class RejectChargeAction
         }
     }
 
-    private function normalizeReason(?string $reasonRaw): ?string
+    private function normalizeReason(string $reasonRaw): string
     {
-        if (! is_string($reasonRaw)) {
-            return null;
-        }
-
-        $reason = trim($reasonRaw);
-
-        return $reason !== '' ? Str::limit($reason, 2000) : null;
+        return Str::limit(trim($reasonRaw), 2000);
     }
 }

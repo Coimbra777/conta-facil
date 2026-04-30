@@ -33,7 +33,14 @@ class StorePublicExpenseTest extends TestCase
                 'message',
                 'meta',
                 'data' => [
-                    'expense' => ['id', 'public_hash', 'manage_token', 'manage_path'],
+                    'expense' => [
+                        'id',
+                        'public_hash',
+                        'participant_url',
+                        'manage_url',
+                        'manage_token',
+                        'manage_path',
+                    ],
                 ],
             ]);
 
@@ -41,6 +48,14 @@ class StorePublicExpenseTest extends TestCase
         $this->assertIsString($managePath);
         $this->assertStringStartsWith('/p/', $managePath);
         $this->assertStringNotContainsString('manage=', $managePath);
+
+        $manageUrl = $response->json('data.expense.manage_url');
+        $this->assertIsString($manageUrl);
+        $this->assertStringContainsString('#manage=', $manageUrl);
+
+        $participantUrl = $response->json('data.expense.participant_url');
+        $this->assertIsString($participantUrl);
+        $this->assertStringNotContainsString('manage=', $participantUrl);
 
         $this->assertDatabaseHas('expenses', [
             'description' => 'Churras',
@@ -145,7 +160,8 @@ class StorePublicExpenseTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.status', 'pending')
-            ->assertJsonPath('data.can_submit_proof', true);
+            ->assertJsonPath('data.can_submit_proof', true)
+            ->assertJsonPath('data.amount', 100);
     }
 
     public function test_same_normalized_phone_on_two_expenses_creates_two_participants(): void

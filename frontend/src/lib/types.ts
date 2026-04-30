@@ -52,12 +52,20 @@ export interface Expense {
     title: string;
     description?: string;
     totalAmount: number;
+    /** `open` | `closed` na API pública; opcional em mocks antigos. */
+    status?: string;
     dueDate?: string;
     pixKeyType: PixKeyType;
     pixKey: string;
     pixReceiverName: string;
     organizerName: string;
     participants: Participant[];
+    /** Resumo quando GET público não lista participantes (privacidade). */
+    participantsTotalCount?: number;
+    validatedChargesCount?: number;
+    openChargesCount?: number;
+    /** Igual a `amount_per_participant` na API; é média quando há valores personalizados. */
+    averageAmountPerParticipant?: number;
     createdAt: string;
     /** Resposta pública com token de gestão válido (header). */
     canManage?: boolean;

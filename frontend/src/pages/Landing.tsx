@@ -41,6 +41,12 @@ export default function Landing() {
 
                     <div className="flex flex-wrap gap-4 w-full sm:w-auto">
                         <Link
+                            to="/cobranca-publica/nova"
+                            className="bg-card text-foreground font-bold text-base sm:text-lg px-6 sm:px-8 py-4 border-4 border-foreground rounded-xl brutal-press brutal-press-md text-center w-full sm:w-auto"
+                        >
+                            Criar sem cadastro
+                        </Link>
+                        <Link
                             to="/cobrancas/nova"
                             className="bg-accent text-accent-foreground font-black uppercase tracking-wider text-base sm:text-lg px-6 sm:px-8 py-4 border-4 border-foreground rounded-xl brutal-press brutal-press-md text-center w-full sm:w-auto inline-flex items-center justify-center gap-2"
                         >

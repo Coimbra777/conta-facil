@@ -13,9 +13,10 @@ class CreatedPublicExpenseResource extends JsonResource
         return [
             'id' => $this->id,
             'public_hash' => $this->public_hash,
+            'participant_url' => $this->getPublicUrl(),
+            'manage_url' => $this->getManageUrl(),
+            /** @deprecated Prefer participant_url + manage_url; mantido por compatibilidade com clientes antigos. */
             'manage_token' => $this->manage_token,
-            'public_url' => $this->getPublicUrl(),
-            'manage_url' => $this->getPublicUrl(),
             'manage_path' => '/p/'.$this->public_hash,
         ];
     }

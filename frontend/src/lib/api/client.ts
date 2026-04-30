@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import { mapApiErrorToUserMessage } from "./errorMessages";
 import { mockApi, isDemoPresentationPublicHash } from "./mockStore";
+import { buildPublicLink, buildPublicManageLink } from "../format";
 
 const BASE_URL_RAW = import.meta.env.VITE_API_BASE_URL as string | undefined;
 
@@ -152,6 +153,7 @@ function mapExpenseFromApi(e: Record<string, unknown>): Expense {
         publicHash: String(e.public_hash ?? ""),
         title: String(e.description ?? "Cobrança"),
         description: e.description ? String(e.description) : undefined,
+        status: e.status != null ? String(e.status) : undefined,
         totalAmount: Number(e.total_amount ?? 0),
         dueDate: e.due_date ? String(e.due_date) : undefined,
         pixKeyType: guessPixKeyType(String(e.pix_key ?? "")),
@@ -161,6 +163,10 @@ function mapExpenseFromApi(e: Record<string, unknown>): Expense {
         createdAt: e.created_at
             ? String(e.created_at)
             : new Date().toISOString(),
+        averageAmountPerParticipant:
+            e.average_amount_per_participant !== undefined
+                ? Number(e.average_amount_per_participant)
+                : undefined,
         participants: charges.map((c) => {
             const { name, phone } = chargeParticipantFields(c);
             return {
@@ -182,24 +188,36 @@ function mapExpenseFromApi(e: Record<string, unknown>): Expense {
 function mapPublicExpenseFromApi(e: Record<string, unknown>): Expense {
     const rows =
         (e.participants as Record<string, unknown>[] | undefined) ?? [];
-    const per = Number(e.amount_per_participant ?? 0);
+    const per = Number(
+        e.amount_per_participant ?? e.average_amount_per_participant ?? 0,
+    );
 
-    const participants = rows.map((m, i) => ({
-        id: String(m.charge_id ?? m.id ?? `pub-${i}-${String(m.name ?? "")}`),
-        name: String(m.name ?? ""),
-        phone: String(m.phone ?? ""),
-        amount: Number(m.amount ?? per),
-        status: (m.charge_status ?? m.status) as ApiStatus,
-        rejectionReason: m.rejection_reason
-            ? String(m.rejection_reason)
-            : undefined,
-    }));
+    const participants =
+        rows.length > 0
+            ? rows.map((m, i) => ({
+                  id: String(
+                      m.charge_id ?? m.id ?? `pub-${i}-${String(m.name ?? "")}`,
+                  ),
+                  name: String(m.name ?? ""),
+                  phone: String(m.phone ?? ""),
+                  amount: Number(m.amount ?? per),
+                  status: (m.charge_status ?? m.status) as ApiStatus,
+                  rejectionReason: m.rejection_reason
+                      ? String(m.rejection_reason)
+                      : undefined,
+              }))
+            : [];
+
+    const participantsTotalCountRaw = e.participants_total_count;
+    const validatedRaw = e.validated_charges_count;
+    const openRaw = e.open_charges_count;
 
     return {
         id: String(e.id ?? ""),
         publicHash: String(e.public_hash ?? ""),
         title: String(e.description ?? "Cobrança"),
         description: e.description ? String(e.description) : undefined,
+        status: e.status != null ? String(e.status) : undefined,
         totalAmount: Number(e.total_amount ?? e.amount ?? 0),
         dueDate: e.due_date ? String(e.due_date) : undefined,
         pixKeyType: guessPixKeyType(String(e.pix_key ?? "")),
@@ -210,6 +228,19 @@ function mapPublicExpenseFromApi(e: Record<string, unknown>): Expense {
             ? String(e.created_at)
             : new Date().toISOString(),
         participants,
+        participantsTotalCount:
+            participantsTotalCountRaw !== undefined
+                ? Number(participantsTotalCountRaw)
+                : participants.length > 0
+                  ? participants.length
+                  : undefined,
+        validatedChargesCount:
+            validatedRaw !== undefined ? Number(validatedRaw) : undefined,
+        openChargesCount: openRaw !== undefined ? Number(openRaw) : undefined,
+        averageAmountPerParticipant:
+            e.average_amount_per_participant !== undefined
+                ? Number(e.average_amount_per_participant)
+                : per,
         canManage: Boolean(e.can_manage ?? false),
     };
 }
@@ -602,7 +633,8 @@ export const api = {
         hash: string,
         manageToken?: string | null,
     ): Promise<Expense | null> => {
-        if (usePublicMock(hash)) return mockApi.getExpenseByHash(hash);
+        if (usePublicMock(hash))
+            return mockApi.getExpenseByHash(hash, manageToken);
         const base = getRealBaseUrl();
         const res = await fetch(`${base}/api/v1/public/expenses/${hash}`, {
             headers: manageTokenHeaders(manageToken),
@@ -634,23 +666,22 @@ export const api = {
                 status: ApiStatus;
                 rejection_reason?: string | null;
                 can_submit_proof?: boolean;
-            }>("POST", `/public/expenses/${hash}/validate-participant`, {
-                name,
-                phone,
-            });
+                amount: number;
+            }>(
+                "POST",
+                `/public/expenses/${hash}/validate-participant`,
+                {
+                    name,
+                    phone,
+                },
+            );
             const exp = await api.getPublicExpense(hash, manageToken);
             if (!exp) return null;
-            const perMember =
-                exp.participants.find(
-                    (p) => p.name.toLowerCase() === name.toLowerCase().trim(),
-                )?.amount ??
-                exp.participants[0]?.amount ??
-                exp.totalAmount / Math.max(1, exp.participants.length);
             const participant: Participant = {
                 id: `self-${hash}`,
                 name: name.trim(),
                 phone: phone.trim(),
-                amount: perMember,
+                amount: Number(data.amount ?? 0),
                 status: data.status,
                 rejectionReason: data.rejection_reason
                     ? String(data.rejection_reason)
@@ -725,6 +756,85 @@ export const api = {
             "DELETE",
             `/expenses/${expenseId}`,
         );
+    },
+
+    /** Cria despesa anônima (sem conta); sempre chama a API real em `/api/public/expenses`. */
+    createPublicExpense: async (input: {
+        ownerName: string;
+        ownerPhone: string;
+        description: string;
+        amount: number;
+        pixKey: string;
+        pixQrCode?: string | null;
+        dueDate: string;
+        participants: Array<{ name: string; phone: string }>;
+        includeOwnerAsParticipant?: boolean;
+    }): Promise<{
+        participantUrl: string;
+        manageUrl: string;
+        manageToken: string;
+        publicHash: string;
+        expenseId: string;
+    }> => {
+        const base = getRealBaseUrl();
+        const res = await fetch(`${base}/api/public/expenses`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                owner_name: input.ownerName.trim(),
+                owner_phone: input.ownerPhone.replace(/\D/g, ""),
+                description: input.description.trim(),
+                amount: input.amount,
+                pix_key: input.pixKey.trim(),
+                pix_qr_code: input.pixQrCode ?? null,
+                due_date: input.dueDate.slice(0, 10),
+                participants: input.participants.map((p) => ({
+                    name: p.name.trim(),
+                    phone: p.phone.replace(/\D/g, ""),
+                })),
+                include_owner_as_participant:
+                    input.includeOwnerAsParticipant ?? false,
+            }),
+        });
+        const json = await readJson(res);
+        if (!res.ok) {
+            const o = json as Record<string, unknown>;
+            if (o.success === false) {
+                throw apiErr(String(o.message ?? "Erro."), {
+                    code: typeof o.code === "string" ? o.code : undefined,
+                    status: res.status,
+                    errors: o.errors as Record<string, string[]> | undefined,
+                });
+            }
+            if (o.errors) throwLaravelValidation(o, res.status);
+            throw apiErr(String(o.message ?? "Erro ao criar cobrança."), {
+                status: res.status,
+            });
+        }
+        const data = unwrapEnvelope<{ expense: Record<string, unknown> }>(
+            json,
+            res,
+        );
+        const exp = data.expense;
+        const publicHash = String(exp.public_hash ?? "");
+        const manageToken = String(exp.manage_token ?? "");
+        const participantUrl =
+            typeof exp.participant_url === "string" && exp.participant_url !== ""
+                ? exp.participant_url
+                : buildPublicLink(publicHash);
+        const manageUrl =
+            typeof exp.manage_url === "string" && exp.manage_url !== ""
+                ? exp.manage_url
+                : manageToken && publicHash
+                  ? buildPublicManageLink(publicHash, manageToken)
+                  : "";
+        return {
+            participantUrl,
+            manageUrl,
+            manageToken,
+            publicHash,
+            expenseId: String(exp.id ?? ""),
+        };
     },
 };
 

@@ -176,9 +176,28 @@ export const mockApi = {
         await delay(180);
         return load().expenses.find((e) => e.id === id) ?? null;
     },
-    async getExpenseByHash(hash: string) {
+    async getExpenseByHash(hash: string, manageToken?: string | null) {
         await delay(180);
-        return load().expenses.find((e) => e.publicHash === hash) ?? null;
+        const exp = load().expenses.find((e) => e.publicHash === hash) ?? null;
+        if (!exp) return null;
+        const hasManage = Boolean(manageToken?.trim());
+        if (hasManage) {
+            return { ...exp, canManage: true };
+        }
+        const total = exp.participants.length;
+        const validated = exp.participants.filter(
+            (p) => p.status === "validated",
+        ).length;
+        return {
+            ...exp,
+            participants: [],
+            canManage: false,
+            participantsTotalCount: total,
+            validatedChargesCount: validated,
+            openChargesCount: Math.max(0, total - validated),
+            averageAmountPerParticipant:
+                total > 0 ? Math.round((exp.totalAmount / total) * 100) / 100 : 0,
+        };
     },
     async createExpense(input: {
         title: string;

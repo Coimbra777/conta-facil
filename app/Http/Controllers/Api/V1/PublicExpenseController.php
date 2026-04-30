@@ -217,6 +217,7 @@ class PublicExpenseController extends Controller
             'status' => $status,
             'rejection_reason' => $charge->rejection_reason,
             'can_submit_proof' => in_array($status, ['pending', 'rejected'], true),
+            'amount' => round((float) $charge->amount, 2),
         ], $this->messageForValidateParticipantStatus($status));
     }
 
@@ -262,6 +263,7 @@ class PublicExpenseController extends Controller
             'charge' => [
                 'id' => $charge->id,
                 'status' => $charge->status,
+                'rejection_reason' => $charge->rejection_reason,
             ],
         ], 'Comprovante rejeitado.');
     }

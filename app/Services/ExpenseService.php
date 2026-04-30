@@ -91,6 +91,8 @@ class ExpenseService
             );
         }
 
+        $this->assertNoDuplicatePhonesForParticipants($participants);
+
         $result = DB::transaction(function () use ($expense, $participants) {
             $newChargeIds = [];
 
@@ -370,5 +372,32 @@ class ExpenseService
         $this->redistributeChargeAmounts($reloaded);
 
         return $reloaded->fresh()->load(Charge::eagerChargesWithParticipant());
+    }
+
+    /**
+     * Telefone repetido no mesmo payload não pode ser ignorado silenciosamente.
+     *
+     * @param  list<array{name?: string, phone?: string, amount?: mixed}>  $participants
+     */
+    private function assertNoDuplicatePhonesForParticipants(array $participants): void
+    {
+        $seenInPayload = [];
+
+        foreach ($participants as $p) {
+            $phone = PhoneNormalizer::digits($p['phone'] ?? '');
+            $name = trim((string) ($p['name'] ?? ''));
+            if ($phone === '' || strlen($phone) < 10 || $name === '') {
+                continue;
+            }
+
+            if (isset($seenInPayload[$phone])) {
+                throw new HttpApiException(
+                    'Já existe um participante com este telefone nesta despesa.',
+                    'DUPLICATE_PARTICIPANT',
+                    422,
+                );
+            }
+            $seenInPayload[$phone] = true;
+        }
     }
 }

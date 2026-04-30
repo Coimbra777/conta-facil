@@ -126,11 +126,28 @@ class PublicExpenseTest extends TestCase
             ->assertJsonPath('data.expense.description', 'Churrasco')
             ->assertJsonPath('data.expense.pix_key', '11999999999')
             ->assertJsonPath('data.expense.can_manage', false)
+            ->assertJsonPath('data.expense.participants_total_count', 2)
+            ->assertJsonPath('data.expense.validated_charges_count', 0)
+            ->assertJsonPath('data.expense.open_charges_count', 2)
+            ->assertJsonMissingPath('data.expense.participants')
             ->assertJsonStructure([
                 'success',
                 'message',
                 'data' => [
-                    'expense' => ['id', 'description', 'total_amount', 'amount', 'amount_per_participant', 'pix_key', 'pix_qr_code', 'participants', 'can_manage'],
+                    'expense' => [
+                        'id',
+                        'description',
+                        'total_amount',
+                        'amount',
+                        'amount_per_participant',
+                        'average_amount_per_participant',
+                        'pix_key',
+                        'pix_qr_code',
+                        'participants_total_count',
+                        'validated_charges_count',
+                        'open_charges_count',
+                        'can_manage',
+                    ],
                 ],
                 'meta',
             ]);
@@ -147,6 +164,7 @@ class PublicExpenseTest extends TestCase
             ->assertJsonPath('data.expense.can_manage', true)
             ->assertJsonPath('data.expense.owner_phone', '11988887777')
             ->assertJsonCount(2, 'data.expense.participants')
+            ->assertJsonPath('data.expense.average_amount_per_participant', '50.00')
             ->assertJsonStructure([
                 'success',
                 'message',
@@ -283,6 +301,7 @@ class PublicExpenseTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.status', 'pending')
             ->assertJsonPath('data.can_submit_proof', true)
+            ->assertJsonPath('data.amount', 50)
             ->assertJsonPath('message', 'Você ainda não enviou comprovante.');
     }
 
@@ -627,6 +646,7 @@ class PublicExpenseTest extends TestCase
 
         $this->patchJson("/api/v1/public/charges/{$charge2->id}/reject", [
             'manage_token' => 'manage-token-secret',
+            'reason' => 'Comprovante ilegível.',
         ])->assertStatus(422)->assertJsonPath('message', $msg);
 
         $this->postJson('/api/v1/public/expenses/test-hash-123/validate-participant', [

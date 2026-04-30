@@ -13,6 +13,7 @@ import NewExpense from "./pages/NewExpense.tsx";
 import ExpenseDetail from "./pages/ExpenseDetail.tsx";
 import ExpenseSuccess from "./pages/ExpenseSuccess.tsx";
 import PublicExpense from "./pages/PublicExpense.tsx";
+import PublicNewExpense from "./pages/PublicNewExpense.tsx";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
                         <Route path="/cobrancas/:id/sucesso" element={<ProtectedRoute><ExpenseSuccess /></ProtectedRoute>} />
 
                         <Route path="/p/:hash" element={<PublicExpense />} />
+                        <Route path="/cobranca-publica/nova" element={<PublicNewExpense />} />
 
                         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                         <Route path="*" element={<NotFound />} />

@@ -10,3 +10,4 @@ Não é compromisso de escopo — apenas direções possíveis.
 - **Monitoramento** — Sentry, métricas, alertas  
 - **QR Pix / gateway** — liquidação automática com PSP (esforço alto)  
 - **PWA** — melhor uso no celular  
+- **Auditoria de validação/rejeição** — registrar quem validou ou rejeitou (usuário/token), data/hora, motivo da rejeição, opcionalmente IP / User-Agent para disputas e suporte  

@@ -9,7 +9,7 @@ import { ModalShell } from "@/components/ModalShell";
 import { StatusBadge } from "@/components/StatusBadge";
 import { api } from "@/lib/api/client";
 import type { Expense, Participant } from "@/lib/types";
-import { buildPublicLink, formatBRL, formatDate } from "@/lib/format";
+import { buildPublicLink, formatBRL, formatDate, isDueDateBeforeToday } from "@/lib/format";
 import { ArrowLeft, Trash2 } from "lucide-react";
 
 export default function ExpenseDetail() {
@@ -76,6 +76,18 @@ export default function ExpenseDetail() {
                                 <h1 className="font-display text-3xl sm:text-4xl uppercase">{exp.title}</h1>
                                 {exp.description && <p className="text-muted-foreground mt-1">{exp.description}</p>}
                                 <p className="text-sm text-muted-foreground mt-1">Vence em {formatDate(exp.dueDate)}</p>
+                                {(exp.status === "open" || exp.status === undefined) &&
+                                    isDueDateBeforeToday(exp.dueDate) && (
+                                        <div
+                                            role="status"
+                                            className="mt-3 rounded-xl border-4 border-amber-600/45 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-950 dark:border-amber-500/40 dark:bg-amber-950/35 dark:text-amber-50"
+                                        >
+                                            <strong className="font-black uppercase text-xs tracking-wide">
+                                                Vencimento (informativo)
+                                            </strong>
+                                            — neste MVP a data não bloqueia envio de comprovante nem validação; combine com os participantes se precisar.
+                                        </div>
+                                    )}
                             </div>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <StatusBadge status={allPaid ? "validated" : "pending"} />

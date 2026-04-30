@@ -10,12 +10,17 @@ Substituir planilhas e cobranças informais sem visibilidade de quem já pagou o
 
 ## Fluxo simples
 
-1. Cadastro / login (organizador) ou criação pública sem conta.
+1. Cadastro / login (organizador) ou **criação pública sem conta** (`/cobranca-publica/nova` no frontend → `POST /api/public/expenses`).
 2. Criação da cobrança e inclusão de participantes com valores.
-3. Distribuição do link público (`/p/{hash}`).
+3. Distribuição do link público (`/p/{hash}`). **Link de gestão** (`#manage=` ou token separado) só para o organizador — não há recuperação automática se for perdido neste MVP.
 4. Pagamento Pix fora do sistema.
 5. Upload do comprovante pelo participante.
 6. Validação ou rejeição pelo organizador (painel ou gestão via token).
+
+### Regras de produto (MVP)
+
+- **`due_date`:** informativo; não bloqueia fluxos após o dia do vencimento.
+- **`amount_per_participant` na despesa:** quando cada participante tem valor diferente no backend, esse campo guarda a **média** (total ÷ N); valores reais estão em cada **Charge**.
 
 ## Entidades principais
 

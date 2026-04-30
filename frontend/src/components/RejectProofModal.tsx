@@ -35,12 +35,12 @@ export function RejectProofModal({ open, participantName, onClose, onConfirm }: 
                 )}
                 <textarea
                     value={reason}
-                    onChange={(e) => setReason(e.target.value.slice(0, 280))}
+                    onChange={(e) => setReason(e.target.value.slice(0, 2000))}
                     rows={4}
                     placeholder="Ex: Comprovante ilegível, valor diferente, etc."
                     className="w-full border-4 border-foreground rounded-xl p-3 font-medium bg-background focus:outline-none focus:ring-4 focus:ring-accent"
                 />
-                <div className="text-xs text-muted-foreground text-right">{reason.length}/280</div>
+                <div className="text-xs text-muted-foreground text-right">{reason.length}/2000</div>
                 <div className="flex gap-3">
                     <button
                         onClick={onClose}

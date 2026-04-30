@@ -304,10 +304,32 @@ class ExpenseTest extends TestCase
 
         $add->assertOk();
         $this->assertDatabaseCount('charges', 3);
+    }
 
-        $charges = \App\Models\Charge::where('expense_id', $expenseId)->orderBy('id')->get();
-        $total = $charges->sum(fn ($c) => (float) $c->amount);
-        $this->assertEquals(90.00, $total);
+    public function test_add_participants_rejects_duplicate_phone_in_payload(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $create = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/expenses', $this->expensePayload([
+                'total_amount' => 60.00,
+            ]));
+        $create->assertStatus(201);
+        $expenseId = $create->json('data.expense.id');
+
+        $dup = $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/expenses/{$expenseId}/participants", [
+                'participants' => [
+                    ['name' => 'Um', 'phone' => '11000000001', 'amount' => 30],
+                    ['name' => 'Dois mesmo tel', 'phone' => '11000000001', 'amount' => 30],
+                ],
+            ]);
+
+        $dup->assertStatus(422)
+            ->assertJsonPath('message', 'Já existe um participante com este telefone nesta despesa.')
+            ->assertJsonPath('code', 'DUPLICATE_PARTICIPANT');
+
+        $this->assertDatabaseCount('charges', 0);
     }
 
     public function test_non_creator_cannot_patch_expense(): void

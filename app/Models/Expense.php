@@ -61,9 +61,12 @@ class Expense extends Model
         return rtrim((string) config('app.url'), '/').'/p/'.$this->public_hash;
     }
 
+    /**
+     * Link para o organizador (fragmento com token — adequado ao SPA em /p/:hash).
+     */
     public function getManageUrl(): string
     {
-        return $this->getPublicUrl();
+        return $this->getPublicUrl().'#manage='.rawurlencode((string) $this->manage_token);
     }
 
     public function scopeByHash($query, string $hash)

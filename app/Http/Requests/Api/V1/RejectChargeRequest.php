@@ -11,10 +11,26 @@ class RejectChargeRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('reason')) {
+            $this->merge([
+                'reason' => trim((string) $this->input('reason')),
+            ]);
+        }
+    }
+
     public function rules(): array
     {
         return [
-            'reason' => ['nullable', 'string', 'max:2000'],
+            'reason' => ['required', 'string', 'min:1', 'max:2000'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'reason.required' => 'Informe o motivo da rejeição.',
         ];
     }
 }

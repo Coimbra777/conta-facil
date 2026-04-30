@@ -7,7 +7,8 @@
 ## Gestão pública
 
 - **`manage_token`** opaco; envio via query `manage` ou header **`X-Manage-Token`**; comparação com **`hash_equals`** no servidor.
-- Link enviado ao participante não deve incluir esse token.
+- O link **para participantes** não deve incluir esse token. Na **criação** pública (`POST /api/public/expenses`), a API devolve `participant_url` e **`manage_url`** (fragmento `#manage=`); prefira esses campos à exposição manual do token (embora `manage_token` ainda possa vir na resposta por compatibilidade).
+- **GET público** sem gestão retorna apenas **totais agregados** (quantidade de participantes, pagos, em aberto) — não lista nome/telefone/status por pessoa.
 
 ## Rate limiting
 
