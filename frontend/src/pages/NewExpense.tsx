@@ -35,6 +35,15 @@ const newP = (): DraftParticipant => ({
 
 const OWNER_ROW_PREFIX = "owner-self";
 
+function differenceMessage(diff: number): string {
+    if (Math.abs(diff) < 0.001) return "Os valores estão balanceados.";
+    if (diff > 0) {
+        return `Faltam ${formatBRL(diff)} para fechar o total da cobrança.`;
+    }
+
+    return `Há ${formatBRL(Math.abs(diff))} excedente. Esse valor ficará em caixa.`;
+}
+
 export default function NewExpense() {
     const nav = useNavigate();
     const { user } = useAuth();
@@ -324,7 +333,13 @@ export default function NewExpense() {
                         highlight={Math.abs(diff) > 0.001 ? (diff > 0 ? "warn" : "error") : "ok"}
                     />
                     <Row label="Participantes" value={participants.length} />
-                    <p className="text-xs font-medium text-foreground/70 mt-2">
+                    <p
+                        className="rounded-xl border-2 border-foreground/70 bg-background/70 px-3 py-3 text-sm font-medium leading-snug text-foreground"
+                        role="status"
+                    >
+                        {differenceMessage(diff)}
+                    </p>
+                    <p className="text-xs font-medium text-foreground/70">
                         A soma dos valores dos participantes deve ser igual ao total. Enquanto houver diferença, não é possível concluir.
                     </p>
                 </aside>

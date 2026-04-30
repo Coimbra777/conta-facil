@@ -105,4 +105,12 @@ describe("AuthPage login UX", () => {
             screen.queryByRole("button", { name: /criar conta agora/i }),
         ).not.toBeInTheDocument();
     });
+
+    it("cadastro nao renderiza campo de cpf", async () => {
+        renderLogin("/cadastro");
+
+        expect(await screen.findByLabelText(/nome/i)).toBeInTheDocument();
+        expect(screen.queryByLabelText(/cpf/i)).not.toBeInTheDocument();
+        expect(screen.queryByPlaceholderText(/cpf/i)).not.toBeInTheDocument();
+    });
 });

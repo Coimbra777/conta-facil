@@ -82,6 +82,21 @@ describe("PublicExpense", () => {
         expect(tel).toHaveValue("(98) 97013-0666");
     });
 
+    it("does not render the repeated organizer fallback copy", async () => {
+        vi.spyOn(api, "getPublicExpense").mockResolvedValue(
+            baseExpense({ organizerName: "" }),
+        );
+        renderRoute("/p/other-hash");
+        await waitFor(() =>
+            expect(
+                screen.getByText(/Organizado pelo responsável da cobrança/i),
+            ).toBeInTheDocument(),
+        );
+        expect(
+            screen.queryByText(/Organizado por Organizador/i),
+        ).not.toBeInTheDocument();
+    });
+
     it("identifyParticipant receives digits-only phone", async () => {
         vi.spyOn(api, "getPublicExpense").mockResolvedValue(
             baseExpense({ publicHash: DEMO_PRESENTATION_PUBLIC_HASH }),

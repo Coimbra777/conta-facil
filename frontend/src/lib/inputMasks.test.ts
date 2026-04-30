@@ -6,8 +6,12 @@ describe("formatBrazilPhoneDisplay", () => {
         expect(formatBrazilPhoneDisplay("9")).toBe("(9");
         expect(formatBrazilPhoneDisplay("98")).toBe("(98");
         expect(formatBrazilPhoneDisplay("989")).toBe("(98) 9");
-        expect(formatBrazilPhoneDisplay("9897013")).toBe("(98) 97013");
+        expect(formatBrazilPhoneDisplay("9897013")).toBe("(98) 9701-3");
         expect(formatBrazilPhoneDisplay("98970130666")).toBe("(98) 97013-0666");
+    });
+
+    it("formats 10-digit Brazilian numbers", () => {
+        expect(formatBrazilPhoneDisplay("1133334444")).toBe("(11) 3333-4444");
     });
 
     it("strips non-digits and caps at 11", () => {

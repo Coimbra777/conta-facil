@@ -12,7 +12,7 @@ Sistema para criar cobranças compartilhadas via Pix, adicionar participantes e 
 
 ## Hardening Fase 1
 
-- `UserResource` não expõe CPF bruto nem `email_verified_at` no contrato padrão de auth.
+- Cadastro e sessão autenticada não coletam nem expõem CPF; `UserResource` também omite `email_verified_at`.
 - Tokens Sanctum expiram por padrão em `43200` minutos (30 dias) via `SANCTUM_TOKEN_EXPIRATION_MINUTES`.
 - Comprovantes usam storage privado e o backend remove arquivo + registro ao excluir despesa/participante ou substituir proof reenviado.
 - `GET /api/v1/expenses` agora é paginado (`per_page` padrão `15`, máximo `50`).

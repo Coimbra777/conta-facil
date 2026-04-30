@@ -279,7 +279,7 @@ function mapPublicExpenseFromApi(e: Record<string, unknown>): Expense {
         pixKeyType: guessPixKeyType(String(e.pix_key ?? "")),
         pixKey: String(e.pix_key ?? ""),
         pixReceiverName: String(e.owner_name ?? ""),
-        organizerName: String(e.owner_name ?? "Organizador"),
+        organizerName: String(e.owner_name ?? ""),
         createdAt: e.created_at
             ? String(e.created_at)
             : new Date().toISOString(),

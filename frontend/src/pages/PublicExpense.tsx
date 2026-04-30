@@ -29,6 +29,14 @@ import { CheckCircle2, Clock, Smartphone, AlertTriangle } from "lucide-react";
 const IDENTIFY_ERROR_MAIN =
     "Não encontramos esses dados nesta cobrança. Confira o nome e telefone ou fale com o organizador.";
 
+function organizerCopy(name: string): string {
+    const trimmed = name.trim();
+
+    return trimmed
+        ? `Organizado por ${trimmed}`
+        : "Organizado pelo responsável da cobrança";
+}
+
 export type PublicExpenseProps = {
     /** Usado em `/demo`: mesma UI do participante sem depender da rota `/p/:hash`. */
     embeddedDemoHash?: string;
@@ -195,7 +203,7 @@ export default function PublicExpense({
                             {exp.title}
                         </h1>
                         <p className="text-sm font-bold mt-2">
-                            Organizado por {exp.organizerName}
+                            {organizerCopy(exp.organizerName)}
                         </p>
                         {exp.description && (
                             <p className="text-sm mt-1 opacity-80">

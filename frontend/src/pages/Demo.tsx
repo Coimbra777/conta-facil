@@ -5,6 +5,7 @@ import {
     getDemoPresentationSeedExpense,
 } from "@/lib/api/mockStore";
 import { formatBRL, formatDate } from "@/lib/format";
+import { formatBrazilPhoneDisplay } from "@/lib/inputMasks";
 import PublicExpense from "./PublicExpense";
 
 export default function Demo() {
@@ -93,7 +94,9 @@ export default function Demo() {
                                 <div className="font-bold truncate">{p.name}</div>
                                 <div className="text-xs text-muted-foreground tabular-nums">
                                     {formatBRL(p.amount)}
-                                    {p.phone ? ` · ${p.phone}` : null}
+                                    {p.phone
+                                        ? ` · ${formatBrazilPhoneDisplay(p.phone)}`
+                                        : null}
                                 </div>
                             </div>
                             <div className="flex flex-col items-end gap-1 shrink-0">

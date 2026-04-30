@@ -1,6 +1,7 @@
 import type { Participant } from "@/lib/types";
 import { StatusBadge } from "./StatusBadge";
 import { formatBRL, formatDateTime, initials } from "@/lib/format";
+import { formatBrazilPhoneDisplay } from "@/lib/inputMasks";
 import { Check, Eye, X } from "lucide-react";
 
 interface Props {
@@ -42,7 +43,7 @@ export function ParticipantList({
                                         {p.name}
                                     </div>
                                     <div className="text-sm text-muted-foreground truncate">
-                                        {p.phone}
+                                        {formatBrazilPhoneDisplay(p.phone)}
                                     </div>
                                 </div>
                                 <StatusBadge status={p.status} />

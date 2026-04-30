@@ -18,7 +18,6 @@ class RegisterRequest extends FormRequest
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:6', 'confirmed'],
             'phone' => ['nullable', 'string', 'max:20'],
-            'cpf' => ['nullable', 'string', 'size:11', 'unique:users,cpf'],
         ];
     }
 }

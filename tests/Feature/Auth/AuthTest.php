@@ -173,7 +173,7 @@ class AuthTest extends TestCase
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
 
-    public function test_register_persists_profile_fields(): void
+    public function test_register_persists_phone_and_ignores_cpf(): void
     {
         Http::fake();
 
@@ -191,6 +191,10 @@ class AuthTest extends TestCase
         $this->assertDatabaseHas('users', [
             'email' => 'john@example.com',
             'phone' => '11999999999',
+        ]);
+        $this->assertDatabaseMissing('users', [
+            'email' => 'john@example.com',
+            'cpf' => '12345678901',
         ]);
 
         Http::assertNothingSent();
@@ -231,7 +235,6 @@ class AuthTest extends TestCase
             'email' => 'john@example.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
-            'cpf' => '12345678901',
         ]);
 
         $response->assertCreated()

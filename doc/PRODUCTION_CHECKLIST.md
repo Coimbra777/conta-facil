@@ -46,7 +46,7 @@
 ## Smoke test
 
 - [ ] Login / registro
-- [ ] `GET /api/v1/auth/me` sem CPF bruto
+- [ ] `GET /api/v1/auth/me` sem CPF e sem `email_verified_at`
 - [ ] Criar cobrança e participantes
 - [ ] Link público e upload
 - [ ] Reenvio após rejeição substitui o comprovante anterior

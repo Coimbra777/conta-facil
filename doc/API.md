@@ -59,7 +59,7 @@ POST /api/v1/auth/logout
 }
 ```
 
-`UserResource` não expõe `cpf` bruto nem `email_verified_at`.
+O cadastro não coleta CPF. `UserResource` também não expõe `email_verified_at`.
 
 ---
 

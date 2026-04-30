@@ -66,7 +66,7 @@
 
 ## Minimização de dados
 
-- `UserResource` remove **CPF bruto** do contrato padrão da API.
+- O produto não coleta **CPF** nos fluxos atuais de cadastro/autenticação.
 - O endpoint de sessão autenticada também não expõe `email_verified_at`.
 
 ## Melhorias futuras sugeridas
