@@ -231,7 +231,58 @@ describe("PublicExpense", () => {
         const titles = screen.getAllByText(/^Cobrança finalizada$/i);
         expect(titles.length).toBeGreaterThan(0);
         expect(
+            screen.getByText(/Comprovantes excluídos após a finalização da cobrança\./i),
+        ).toBeInTheDocument();
+        expect(
             screen.getByText(/Não é mais necessário enviar comprovante/i),
+        ).toBeInTheDocument();
+    });
+
+    it("shows the proof auto-delete notice before upload", async () => {
+        const expense = baseExpense();
+        vi.spyOn(api, "getPublicExpense").mockResolvedValue(expense);
+        vi.spyOn(api, "identifyParticipant").mockResolvedValue({
+            participant: expense.participants[0],
+            expense,
+        });
+
+        renderRoute("/p/other-hash");
+
+        await waitFor(() =>
+            expect(screen.getByText(/Quem é você/i)).toBeInTheDocument(),
+        );
+
+        fireEvent.change(screen.getByPlaceholderText("Ex.: Marina Reis"), {
+            target: { value: "Alice" },
+        });
+        fireEvent.change(
+            screen.getByPlaceholderText(GENERIC_BRAZIL_PHONE_PLACEHOLDER),
+            {
+                target: { value: "11999999999" },
+            },
+        );
+        fireEvent.click(
+            screen.getByRole("button", { name: /Ver meu pagamento/i }),
+        );
+
+        expect(
+            await screen.findByText(
+                /O comprovante será usado apenas para validação e será excluído automaticamente quando a cobrança for finalizada\./i,
+            ),
+        ).toBeInTheDocument();
+    });
+
+    it("shows the organizer proof deletion notice in manage mode", async () => {
+        vi.spyOn(api, "getPublicExpense").mockResolvedValue(
+            baseExpense({ canManage: true }),
+        );
+
+        renderRoute("/p/other-hash");
+
+        expect(
+            await screen.findByText(
+                /Ao finalizar a cobrança, os comprovantes enviados serão excluídos automaticamente\./i,
+            ),
         ).toBeInTheDocument();
     });
 });

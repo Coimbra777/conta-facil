@@ -668,20 +668,17 @@ export const api = {
         title: string;
         description?: string;
         totalAmount: number;
-        dueDate?: string;
+        dueDate: string;
         pixKeyType: PixKeyType;
         pixKey: string;
         pixReceiverName: string;
         participants: Array<{ name: string; phone: string; amount: number }>;
     }): Promise<Expense> => {
         if (useMockForProtected()) return mockApi.createExpense(input);
-        const due =
-            input.dueDate?.slice(0, 10) ??
-            new Date().toISOString().slice(0, 10);
         const payload = {
             description: input.title,
             total_amount: input.totalAmount,
-            due_date: due,
+            due_date: input.dueDate.slice(0, 10),
             pix_key: input.pixKey,
             pix_qr_code:
                 input.pixKeyType === "copia_cola" ? input.pixKey : null,

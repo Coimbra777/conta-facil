@@ -12,6 +12,12 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class AddExpenseParticipantsRequest extends FormRequest
 {
+    private const PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL_MESSAGE =
+        'Os valores dos participantes ainda não fecham o total da cobrança.';
+
+    private const PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL_CODE =
+        'PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL';
+
     public function authorize(): bool
     {
         /** @var \App\Models\User|null $user */
@@ -32,6 +38,24 @@ class AddExpenseParticipantsRequest extends FormRequest
             'participants.*.name' => ['required', 'string', 'max:255'],
             'participants.*.phone' => ['required', 'string', 'max:32', new BrazilPhone()],
             'participants.*.amount' => ['required', 'numeric', 'min:0.01'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'participants.required' => 'Adicione pelo menos um participante.',
+            'participants.array' => 'Adicione pelo menos um participante.',
+            'participants.min' => 'Adicione pelo menos um participante.',
+            'participants.*.name.required' => 'Informe o nome do participante.',
+            'participants.*.name.string' => 'Informe um nome válido para o participante.',
+            'participants.*.name.max' => 'O nome do participante é muito longo.',
+            'participants.*.phone.required' => 'Informe o telefone do participante.',
+            'participants.*.phone.string' => 'Informe um telefone válido para o participante.',
+            'participants.*.phone.max' => 'O telefone do participante é muito longo.',
+            'participants.*.amount.required' => 'Informe o valor do participante.',
+            'participants.*.amount.numeric' => 'Informe um valor válido para o participante.',
+            'participants.*.amount.min' => 'O valor do participante deve ser maior que zero.',
         ];
     }
 
@@ -57,7 +81,7 @@ class AddExpenseParticipantsRequest extends FormRequest
             if (count($this->input('participants', [])) < 1) {
                 $validator->errors()->add(
                     'participants',
-                    'Informe ao menos um participante com nome, telefone e valor válidos.'
+                    'Adicione pelo menos um participante.'
                 );
 
                 return;
@@ -66,6 +90,10 @@ class AddExpenseParticipantsRequest extends FormRequest
             /** @var Expense|null $expense */
             $expense = $this->route('expense');
             if (! $expense instanceof Expense) {
+                return;
+            }
+
+            if ($validator->errors()->isNotEmpty()) {
                 return;
             }
 
@@ -102,10 +130,11 @@ class AddExpenseParticipantsRequest extends FormRequest
             $existingSum = round((float) $expense->charges()->sum('amount'), 2);
             $newSum = round(collect($this->input('participants', []))->sum(fn ($p) => (float) ($p['amount'] ?? 0)), 2);
             $total = round((float) $expense->total_amount, 2);
-            if (abs($existingSum + $newSum - $total) > 0.02) {
-                $validator->errors()->add(
-                    'participants',
-                    'A soma dos valores já distribuídos entre participantes existentes mais os novos deve ser igual ao valor total da cobrança.'
+            if (($existingSum + $newSum) + 0.02 < $total) {
+                throw new HttpApiException(
+                    self::PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL_MESSAGE,
+                    self::PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL_CODE,
+                    422,
                 );
             }
         });

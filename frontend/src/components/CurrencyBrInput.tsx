@@ -1,3 +1,4 @@
+import type { Ref } from "react";
 import { maskMoneyTyping } from "@/lib/inputMasks";
 import { cn } from "@/lib/utils";
 
@@ -7,6 +8,7 @@ type Props = {
     placeholder?: string;
     id?: string;
     className?: string;
+    inputRef?: Ref<HTMLInputElement>;
     "aria-invalid"?: boolean;
 };
 
@@ -19,6 +21,7 @@ export function CurrencyBrInput({
     placeholder = "0,00",
     id,
     className,
+    inputRef,
     "aria-invalid": ariaInvalid,
 }: Props) {
     return (
@@ -30,10 +33,14 @@ export function CurrencyBrInput({
                 R$
             </span>
             <input
+                ref={inputRef}
                 id={id}
                 type="text"
                 autoComplete="off"
-                className="brutal-input tabular-nums w-full"
+                className={cn(
+                    "brutal-input tabular-nums w-full",
+                    ariaInvalid && "border-status-rejected-fg bg-status-rejected/20",
+                )}
                 style={{ paddingLeft: "2.75rem" }}
                 inputMode="numeric"
                 aria-invalid={ariaInvalid}

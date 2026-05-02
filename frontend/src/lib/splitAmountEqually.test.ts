@@ -38,7 +38,10 @@ describe("validateExpenseParticipantsPayload", () => {
     ];
 
     it("aceita soma fechando com o total", () => {
-        expect(validateExpenseParticipantsPayload(rows, 100)).toEqual({ ok: true });
+        expect(validateExpenseParticipantsPayload(rows, 100)).toEqual({
+            ok: true,
+            participantErrors: [{}, {}, {}],
+        });
     });
 
     it("recusa amount vazio", () => {
@@ -46,19 +49,44 @@ describe("validateExpenseParticipantsPayload", () => {
             validateExpenseParticipantsPayload(
                 [{ name: "A", phone: "11999999999", amount: "" }],
                 10,
-            ).ok,
-        ).toBe(false);
+            ),
+        ).toEqual({
+            ok: false,
+            message: "Informe o valor do participante.",
+            participantErrors: [{ amount: "Informe o valor do participante." }],
+        });
     });
 
     it("recusa soma diferente do total", () => {
+        const result = validateExpenseParticipantsPayload(
+            [
+                { name: "A", phone: "11999999999", amount: "10,00" },
+                { name: "B", phone: "11988888888", amount: "10,00" },
+            ],
+            100,
+        );
+
+        expect(result).toMatchObject({
+            ok: false,
+            participantErrors: [{}, {}],
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+            expect(result.message).toMatch(
+                /Faltam R\$\s*80,00 para fechar o total da cobrança\./,
+            );
+        }
+    });
+
+    it("aceita soma acima do total", () => {
         expect(
             validateExpenseParticipantsPayload(
                 [
-                    { name: "A", phone: "11999999999", amount: "10,00" },
-                    { name: "B", phone: "11988888888", amount: "10,00" },
+                    { name: "A", phone: "11999999999", amount: "70,00" },
+                    { name: "B", phone: "11988888888", amount: "50,00" },
                 ],
                 100,
-            ).ok,
-        ).toBe(false);
+            ),
+        ).toEqual({ ok: true, participantErrors: [{}, {}] });
     });
 });

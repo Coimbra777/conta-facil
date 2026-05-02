@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Upload, FileCheck2, X } from "lucide-react";
+import { PROOF_UPLOAD_AUTODELETE_NOTICE } from "@/lib/closedExpenseCopy";
 
 interface Props {
     onSubmit: (file: File) => Promise<void> | void;
@@ -25,6 +26,9 @@ export function ProofUpload({ onSubmit, submitting }: Props) {
 
     return (
         <div className="flex flex-col gap-3">
+            <div className="rounded-xl border-2 border-dashed border-foreground/35 bg-muted/40 px-4 py-3 text-sm leading-snug text-foreground">
+                {PROOF_UPLOAD_AUTODELETE_NOTICE}
+            </div>
             <div
                 onClick={pick}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}

@@ -17,6 +17,12 @@ use Illuminate\Support\Facades\Log;
 
 class ExpenseService
 {
+    public const PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL_MESSAGE =
+        'Os valores dos participantes ainda não fecham o total da cobrança.';
+
+    public const PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL_CODE =
+        'PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL';
+
     public function __construct(
         private NotificationService $notificationService,
         private PaymentProofService $paymentProofService,
@@ -170,7 +176,7 @@ class ExpenseService
 
     /**
      * Aplica apenas os valores enviados neste POST aos participantes novos; mantém valores já gravados nas cobranças existentes.
-     * Exige round(sum(cobranças existentes) + sum(payload)) == total_amount da despesa.
+     * Exige round(sum(cobranças existentes) + sum(payload)) >= total_amount da despesa.
      *
      * @param  list<array{name: string, phone: string, amount?: float|int|string|null}>  $newParticipantsOnly
      */
@@ -207,9 +213,11 @@ class ExpenseService
             }
         }
         $running = round($running, 2);
-        if (abs($running - $expectedSum) > 0.02) {
-            throw new \DomainException(
-                'A soma dos valores já distribuídos entre participantes existentes mais os novos deve ser igual ao valor total da cobrança.'
+        if ($running + 0.02 < $expectedSum) {
+            throw new HttpApiException(
+                self::PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL_MESSAGE,
+                self::PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL_CODE,
+                422,
             );
         }
 
@@ -271,6 +279,44 @@ class ExpenseService
             }
             $expense->delete();
         });
+    }
+
+    public function closeExpense(Expense $expense): Expense
+    {
+        return DB::transaction(function () use ($expense) {
+            /** @var Expense $lockedExpense */
+            $lockedExpense = Expense::query()
+                ->whereKey($expense->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($lockedExpense->status !== 'closed') {
+                $lockedExpense->update(['status' => 'closed']);
+            }
+
+            $this->paymentProofService->removeProofFilesForExpense($lockedExpense);
+
+            return $lockedExpense->fresh()->load(Charge::eagerChargesWithParticipantAndProofs());
+        });
+    }
+
+    public function closeExpenseWhenAllChargesValidated(Expense $expense): Expense
+    {
+        $expense->refresh();
+
+        if (! $expense->charges()->exists()) {
+            return $expense;
+        }
+
+        $allValidated = $expense->charges()
+            ->where('status', '!=', 'validated')
+            ->doesntExist();
+
+        if (! $allValidated) {
+            return $expense;
+        }
+
+        return $this->closeExpense($expense);
     }
 
     /**
@@ -367,8 +413,12 @@ class ExpenseService
 
                     $sum = round((float) $expense->charges()->sum('amount'), 2);
                     $total = round((float) $expense->total_amount, 2);
-                    if (abs($sum - $total) > 0.02) {
-                        throw new \DomainException('A soma dos valores dos participantes deve ser igual ao valor total da cobrança.');
+                    if ($sum + 0.02 < $total) {
+                        throw new HttpApiException(
+                            self::PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL_MESSAGE,
+                            self::PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL_CODE,
+                            422,
+                        );
                     }
 
                     $count = $expense->charges()->count();

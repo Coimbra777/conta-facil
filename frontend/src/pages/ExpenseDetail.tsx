@@ -11,6 +11,7 @@ import { api } from "@/lib/api/client";
 import type { Expense, Participant } from "@/lib/types";
 import {
     CLOSED_EXPENSE_ORGANIZER,
+    PROOF_MANAGEMENT_AUTODELETE_NOTICE,
 } from "@/lib/closedExpenseCopy";
 import {
     buildOrganizerExpenseShareMessage,
@@ -200,20 +201,25 @@ export default function ExpenseDetail() {
                         </div>
 
                         {!isClosed ? (
-                            <div className="flex items-center gap-2 flex-wrap p-3 bg-background border-4 border-foreground rounded-xl">
-                                <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Link público</span>
-                                <code className="text-sm break-all flex-1 min-w-0">{publicLink}</code>
-                                <CopyButton variant="ghost" value={publicLink} label="Copiar" />
-                                <a
-                                    href={whatsappShareHref}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1.5 border-4 border-foreground bg-arcade-cyan px-3 py-2 rounded-lg text-xs font-black uppercase brutal-press brutal-press-sm shrink-0"
-                                >
-                                    <MessageCircle className="size-4" />
-                                    WhatsApp
-                                </a>
-                            </div>
+                            <>
+                                <div className="rounded-xl border-2 border-dashed border-foreground/35 bg-muted/40 px-4 py-3 text-sm leading-snug">
+                                    {PROOF_MANAGEMENT_AUTODELETE_NOTICE}
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap p-3 bg-background border-4 border-foreground rounded-xl">
+                                    <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Link público</span>
+                                    <code className="text-sm break-all flex-1 min-w-0">{publicLink}</code>
+                                    <CopyButton variant="ghost" value={publicLink} label="Copiar" />
+                                    <a
+                                        href={whatsappShareHref}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1.5 border-4 border-foreground bg-arcade-cyan px-3 py-2 rounded-lg text-xs font-black uppercase brutal-press brutal-press-sm shrink-0"
+                                    >
+                                        <MessageCircle className="size-4" />
+                                        WhatsApp
+                                    </a>
+                                </div>
+                            </>
                         ) : null}
                     </div>
                 </div>
@@ -226,7 +232,7 @@ export default function ExpenseDetail() {
                         participants={exp.participants}
                         onApprove={isClosed ? undefined : onApprove}
                         onReject={isClosed ? undefined : (p) => setRejectFor(p)}
-                        onViewProof={(p) => setProofFor(p)}
+                        onViewProof={isClosed ? undefined : (p) => setProofFor(p)}
                     />
                 </section>
             </div>

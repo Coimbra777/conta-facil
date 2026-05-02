@@ -22,7 +22,7 @@ class StorePublicExpenseRequest extends FormRequest
             'owner_name' => ['required', 'string', 'max:255'],
             'owner_phone' => ['required', 'string', 'max:32', new BrazilPhone()],
             'description' => ['required', 'string', 'max:500'],
-            'amount' => ['required', 'numeric', 'min:1'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
             'pix_key' => ['required', 'string', 'max:255'],
             'pix_qr_code' => ['nullable', 'string'],
             'due_date' => ['required', 'date', 'after_or_equal:today'],
@@ -31,6 +31,29 @@ class StorePublicExpenseRequest extends FormRequest
             'participants.*.name' => ['required_with:participants.*.phone', 'string', 'max:255'],
             'participants.*.phone' => ['required_with:participants.*.name', 'string', 'max:32', new BrazilPhone()],
             'participants_text' => ['nullable', 'string', 'max:20000'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'owner_name.required' => 'Informe o nome do responsável pela cobrança.',
+            'owner_phone.required' => 'Informe o telefone do responsável pela cobrança.',
+            'description.required' => 'Informe a descrição da cobrança.',
+            'description.string' => 'Informe uma descrição válida para a cobrança.',
+            'description.max' => 'A descrição da cobrança é muito longa.',
+            'amount.required' => 'Informe o valor total da cobrança.',
+            'amount.numeric' => 'Informe um valor total válido.',
+            'amount.min' => 'O valor total deve ser maior que zero.',
+            'pix_key.required' => 'Informe a chave Pix.',
+            'pix_key.string' => 'Informe uma chave Pix válida.',
+            'pix_key.max' => 'A chave Pix informada é muito longa.',
+            'pix_qr_code.string' => 'Informe um QR Code Pix válido.',
+            'due_date.required' => 'Informe a data de vencimento.',
+            'due_date.date' => 'Informe uma data de vencimento válida.',
+            'due_date.after_or_equal' => 'Informe uma data de vencimento igual ou posterior a hoje.',
+            'participants.*.name.required_with' => 'Informe o nome do participante.',
+            'participants.*.phone.required_with' => 'Informe o telefone do participante.',
         ];
     }
 
@@ -68,7 +91,7 @@ class StorePublicExpenseRequest extends FormRequest
     {
         $validator->after(function ($validator) {
             if (count($this->input('participants', [])) < 1) {
-                $validator->errors()->add('participants', 'Informe ao menos um participante com nome e telefone valido.');
+                $validator->errors()->add('participants', 'Adicione pelo menos um participante.');
             }
         });
     }

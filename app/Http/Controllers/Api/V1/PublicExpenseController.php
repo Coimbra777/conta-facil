@@ -72,7 +72,7 @@ class PublicExpenseController extends Controller
         ]);
     }
 
-    public function closeExpense(Request $request, string $hash): JsonResponse
+    public function closeExpense(Request $request, string $hash, ExpenseService $expenseService): JsonResponse
     {
         $expense = Expense::where('public_hash', $hash)->firstOrFail();
 
@@ -103,8 +103,7 @@ class PublicExpenseController extends Controller
             );
         }
 
-        $expense->update(['status' => 'closed']);
-        $expense->load(Charge::eagerChargesWithParticipantAndProofs());
+        $expense = $expenseService->closeExpense($expense);
 
         return ApiResponse::success([
             'expense' => (new PublicExpenseResource($expense))->resolve(),

@@ -6,6 +6,7 @@ use App\Models\Charge;
 use App\Models\Expense;
 use App\Models\ExpenseParticipant;
 use App\Models\PaymentProof;
+use App\Services\ExpenseService;
 use App\Models\User;
 use App\Support\ExpenseClosedPolicy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -16,6 +17,11 @@ use Tests\TestCase;
 class PaymentValidationTest extends TestCase
 {
     use RefreshDatabase;
+
+    private function proofPathForExpense(int $expenseId, string $phone, string $suffix = '000'): string
+    {
+        return "payment-proofs/expense-{$expenseId}/{$phone}-20260502-184530{$suffix}.jpg";
+    }
 
     /**
      * @return array{0: User, 1: Expense, 2: Charge, 3: Charge}
@@ -72,7 +78,7 @@ class PaymentValidationTest extends TestCase
 
         PaymentProof::create([
             'charge_id' => $charge1->id,
-            'file_path' => 'payment-proofs/1/proof.jpg',
+            'file_path' => $this->proofPathForExpense($expense->id, '11900000001', '001'),
             'original_filename' => 'comprovante1.jpg',
             'mime_type' => 'image/jpeg',
             'status' => 'pending',
@@ -80,7 +86,7 @@ class PaymentValidationTest extends TestCase
 
         PaymentProof::create([
             'charge_id' => $charge2->id,
-            'file_path' => 'payment-proofs/2/proof.jpg',
+            'file_path' => $this->proofPathForExpense($expense->id, '11900000002', '002'),
             'original_filename' => 'comprovante2.jpg',
             'mime_type' => 'image/jpeg',
             'status' => 'pending',
@@ -138,9 +144,16 @@ class PaymentValidationTest extends TestCase
             ->assertJsonValidationErrors(['reason']);
     }
 
-    public function test_expense_closes_when_all_charges_validated(): void
+    public function test_expense_closes_when_all_charges_validated_and_deletes_proof_files(): void
     {
+        Storage::fake('local');
+
         [$admin, $expense, $charge1, $charge2] = $this->createExpenseSetup();
+        $path1 = $this->proofPathForExpense($expense->id, '11900000001', '001');
+        $path2 = $this->proofPathForExpense($expense->id, '11900000002', '002');
+
+        Storage::disk('local')->put($path1, 'proof-1');
+        Storage::disk('local')->put($path2, 'proof-2');
 
         $this->actingAs($admin, 'sanctum')
             ->patchJson("/api/v1/charges/{$charge1->id}/validate");
@@ -152,6 +165,16 @@ class PaymentValidationTest extends TestCase
             'id' => $expense->id,
             'status' => 'closed',
         ]);
+        $this->assertDatabaseHas('payment_proofs', [
+            'charge_id' => $charge1->id,
+            'file_path' => null,
+        ]);
+        $this->assertDatabaseHas('payment_proofs', [
+            'charge_id' => $charge2->id,
+            'file_path' => null,
+        ]);
+        Storage::disk('local')->assertMissing($path1);
+        Storage::disk('local')->assertMissing($path2);
     }
 
     public function test_expense_stays_open_until_all_charges_validated(): void
@@ -209,7 +232,9 @@ class PaymentValidationTest extends TestCase
     {
         Storage::fake('local');
 
-        [$admin, , , $charge2] = $this->createExpenseSetup();
+        [$admin, $expense, , $charge2] = $this->createExpenseSetup();
+        $stalePath = $this->proofPathForExpense($expense->id, '11900000002', '002');
+        Storage::disk('local')->put($stalePath, 'stale-proof');
 
         // Reject first
         $this->actingAs($admin, 'sanctum')
@@ -229,6 +254,13 @@ class PaymentValidationTest extends TestCase
         $response->assertStatus(201)
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.status', 'proof_sent');
+
+        Storage::disk('local')->assertMissing($stalePath);
+        $proof = PaymentProof::query()->where('charge_id', $charge2->id)->latest('id')->firstOrFail();
+        $this->assertMatchesRegularExpression(
+            '/^payment-proofs\/expense-'.$expense->id.'\/11900000002-\d{8}-\d{9}\.jpg$/',
+            (string) $proof->file_path,
+        );
     }
 
     public function test_expense_owner_can_view_latest_proof_inline(): void
@@ -236,8 +268,9 @@ class PaymentValidationTest extends TestCase
         Storage::fake('local');
 
         [$admin, , $charge1] = $this->createExpenseSetup();
+        $proofPath = $this->proofPathForExpense($charge1->expense_id, '11900000001', '001');
 
-        Storage::disk('local')->put('payment-proofs/1/proof.jpg', 'fake-jpeg-bytes');
+        Storage::disk('local')->put($proofPath, 'fake-jpeg-bytes');
 
         $response = $this->actingAs($admin, 'sanctum')
             ->get("/api/v1/charges/{$charge1->id}/proofs/latest/view");
@@ -255,8 +288,9 @@ class PaymentValidationTest extends TestCase
         Storage::fake('local');
 
         [, , $charge1] = $this->createExpenseSetup();
+        $proofPath = $this->proofPathForExpense($charge1->expense_id, '11900000001', '001');
 
-        Storage::disk('local')->put('payment-proofs/1/proof.jpg', 'x');
+        Storage::disk('local')->put($proofPath, 'x');
 
         $other = User::factory()->create();
 
@@ -306,14 +340,48 @@ class PaymentValidationTest extends TestCase
             ->assertJsonPath('message', ExpenseClosedPolicy::MESSAGE);
     }
 
-    public function test_owner_can_view_proof_when_expense_closed(): void
+    public function test_closing_expense_cleanup_is_idempotent(): void
+    {
+        Storage::fake('local');
+
+        [, $expense, $charge1, $charge2] = $this->createExpenseSetup();
+        $path1 = $this->proofPathForExpense($expense->id, '11900000001', '001');
+        $path2 = $this->proofPathForExpense($expense->id, '11900000002', '002');
+
+        Storage::disk('local')->put($path1, 'a');
+        Storage::disk('local')->put($path2, 'b');
+
+        $service = app(ExpenseService::class);
+
+        $service->closeExpense($expense);
+        $service->closeExpense($expense->fresh());
+
+        $this->assertDatabaseHas('expenses', [
+            'id' => $expense->id,
+            'status' => 'closed',
+        ]);
+        $this->assertDatabaseHas('payment_proofs', [
+            'charge_id' => $charge1->id,
+            'file_path' => null,
+        ]);
+        $this->assertDatabaseHas('payment_proofs', [
+            'charge_id' => $charge2->id,
+            'file_path' => null,
+        ]);
+        Storage::disk('local')->assertMissing($path1);
+        Storage::disk('local')->assertMissing($path2);
+    }
+
+    public function test_owner_cannot_view_proof_when_expense_closed(): void
     {
         Storage::fake('local');
 
         [$admin, $expense, $charge1, $charge2] = $this->createExpenseSetup();
+        $path1 = $this->proofPathForExpense($expense->id, '11900000001', '001');
+        $path2 = $this->proofPathForExpense($expense->id, '11900000002', '002');
 
-        Storage::disk('local')->put('payment-proofs/1/proof.jpg', 'a');
-        Storage::disk('local')->put('payment-proofs/2/proof.jpg', 'b');
+        Storage::disk('local')->put($path1, 'a');
+        Storage::disk('local')->put($path2, 'b');
 
         $this->actingAs($admin, 'sanctum')
             ->patchJson("/api/v1/charges/{$charge1->id}/validate")
@@ -327,6 +395,53 @@ class PaymentValidationTest extends TestCase
 
         $this->actingAs($admin, 'sanctum')
             ->get("/api/v1/charges/{$charge1->id}/proofs/latest/view")
+            ->assertStatus(404)
+            ->assertJsonPath('code', 'PROOF_REMOVED_AFTER_EXPENSE_CLOSED')
+            ->assertJsonPath('message', 'Comprovantes excluídos após a finalização da cobrança.');
+    }
+
+    public function test_expense_owner_can_download_latest_proof_before_expense_closed(): void
+    {
+        Storage::fake('local');
+
+        [$admin, , $charge1] = $this->createExpenseSetup();
+        $proofPath = $this->proofPathForExpense($charge1->expense_id, '11900000001', '001');
+
+        Storage::disk('local')->put($proofPath, 'fake-jpeg-bytes');
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->get("/api/v1/charges/{$charge1->id}/proof");
+
+        $response->assertOk();
+        $response->assertHeader('Content-Type', 'image/jpeg');
+        $this->assertStringContainsStringIgnoringCase(
+            'attachment',
+            (string) $response->headers->get('Content-Disposition'),
+        );
+    }
+
+    public function test_owner_cannot_download_proof_when_expense_closed(): void
+    {
+        Storage::fake('local');
+
+        [$admin, $expense, $charge1, $charge2] = $this->createExpenseSetup();
+        $path1 = $this->proofPathForExpense($expense->id, '11900000001', '001');
+        $path2 = $this->proofPathForExpense($expense->id, '11900000002', '002');
+
+        Storage::disk('local')->put($path1, 'a');
+        Storage::disk('local')->put($path2, 'b');
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/v1/charges/{$charge1->id}/validate")
             ->assertOk();
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/v1/charges/{$charge2->id}/validate")
+            ->assertOk();
+
+        $this->actingAs($admin, 'sanctum')
+            ->get("/api/v1/charges/{$charge1->id}/proof")
+            ->assertStatus(404)
+            ->assertJsonPath('code', 'PROOF_REMOVED_AFTER_EXPENSE_CLOSED')
+            ->assertJsonPath('message', 'Comprovantes excluídos após a finalização da cobrança.');
     }
 }

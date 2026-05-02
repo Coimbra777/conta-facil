@@ -2,6 +2,7 @@
 
 namespace App\Actions\Expense;
 
+use App\Models\Expense;
 use App\Models\ExpenseParticipant;
 use App\Services\ExpenseService;
 

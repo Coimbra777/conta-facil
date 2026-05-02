@@ -2,6 +2,7 @@
 // Substitua por chamadas reais à API trocando o adapter em src/lib/api/client.ts.
 
 import type { Expense, Participant, PixKeyType, User } from "../types";
+import { validateExpenseParticipantsPayload } from "../splitAmountEqually";
 
 const LS_KEY = "contacerta:mock:v1";
 /** Sessão mock isolada — nunca usar a mesma chave do token Sanctum (`contacerta:auth:v1`). */
@@ -217,6 +218,17 @@ export const mockApi = {
         participants: Array<{ name: string; phone: string; amount: number }>;
     }) {
         await delay(450);
+        const validation = validateExpenseParticipantsPayload(
+            input.participants.map((p) => ({
+                name: p.name,
+                phone: p.phone,
+                amount: p.amount.toFixed(2).replace(".", ","),
+            })),
+            input.totalAmount,
+        );
+        if (!validation.ok) {
+            throw new Error(validation.message);
+        }
         const db = load();
         const organizer = db.user?.name ?? input.pixReceiverName;
         const expense: Expense = {

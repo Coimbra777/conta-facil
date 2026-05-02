@@ -4,11 +4,16 @@ namespace App\Actions\Charge;
 
 use App\Exceptions\HttpApiException;
 use App\Models\Charge;
+use App\Services\ExpenseService;
 use App\Support\ChargeStatusTransition;
 use App\Support\ExpenseClosedPolicy;
 
 class ValidateChargeAction
 {
+    public function __construct(
+        private ExpenseService $expenseService,
+    ) {}
+
     /**
      * @param  ChargeActionAudience::*  $audience
      */
@@ -31,7 +36,9 @@ class ValidateChargeAction
             'rejection_reason' => null,
         ]);
 
-        $charge->expense?->syncClosedStateFromCharges();
+        if ($expense) {
+            $this->expenseService->closeExpenseWhenAllChargesValidated($expense);
+        }
 
         return $charge->fresh()->load(['expenseParticipant', 'expense']);
     }

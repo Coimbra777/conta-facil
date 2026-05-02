@@ -23,10 +23,14 @@ const BY_CODE: Record<string, string> = {
     FORBIDDEN: "Você não tem permissão para realizar esta ação.",
     NOT_FOUND: "Registro não encontrado.",
     PROOF_NOT_FOUND: "Comprovante não encontrado.",
+    PROOF_REMOVED_AFTER_EXPENSE_CLOSED:
+        "Comprovantes excluídos após a finalização da cobrança.",
     PROOF_ALREADY_SENT: "Comprovante já enviado.",
     PARTICIPANT_ALREADY_VALIDATED: "Pagamento já confirmado.",
     DUPLICATED_PARTICIPANT_PHONE:
         "Já existe um participante com este telefone nesta despesa.",
+    PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL:
+        "Os valores dos participantes ainda não fecham o total da cobrança.",
     VALIDATION_ERROR: "Verifique os campos informados.",
     EXPENSE_CANNOT_BE_DELETED:
         "Essa cobrança já possui movimentações e não pode ser excluída.",
@@ -61,9 +65,13 @@ export function mapApiErrorToUserMessage(input: {
     errors?: Record<string, string[]>;
 }): string {
     const code = input.code;
+    const normalizedMsg = input.message.trim();
+    if (code === "VALIDATION_ERROR" && normalizedMsg) {
+        return normalizedMsg;
+    }
+
     if (code && BY_CODE[code]) return BY_CODE[code];
 
-    const normalizedMsg = input.message.trim();
     if (normalizedMsg && BY_MESSAGE[normalizedMsg]) {
         return BY_MESSAGE[normalizedMsg];
     }

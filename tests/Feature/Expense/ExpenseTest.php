@@ -111,6 +111,54 @@ class ExpenseTest extends TestCase
         $this->assertDatabaseCount('charges', 4);
     }
 
+    public function test_store_expense_rejects_past_due_date_in_portuguese(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/expenses', $this->expensePayload([
+                'due_date' => now()->subDay()->format('Y-m-d'),
+            ]))
+            ->assertStatus(422)
+            ->assertJsonPath(
+                'message',
+                'Informe uma data de vencimento igual ou posterior a hoje.',
+            )
+            ->assertJsonPath(
+                'errors.due_date.0',
+                'Informe uma data de vencimento igual ou posterior a hoje.',
+            )
+            ->assertJsonPath('code', 'VALIDATION_ERROR');
+    }
+
+    public function test_store_expense_rejects_missing_due_date_in_portuguese(): void
+    {
+        $admin = $this->createAdminUser();
+        $payload = $this->expensePayload();
+        unset($payload['due_date']);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/expenses', $payload)
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Informe a data de vencimento.')
+            ->assertJsonPath('errors.due_date.0', 'Informe a data de vencimento.')
+            ->assertJsonPath('code', 'VALIDATION_ERROR');
+    }
+
+    public function test_store_expense_rejects_missing_pix_key_in_portuguese(): void
+    {
+        $admin = $this->createAdminUser();
+        $payload = $this->expensePayload();
+        unset($payload['pix_key']);
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/expenses', $payload)
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Informe a chave Pix.')
+            ->assertJsonPath('errors.pix_key.0', 'Informe a chave Pix.')
+            ->assertJsonPath('code', 'VALIDATION_ERROR');
+    }
+
     public function test_add_participants_rejects_invalid_brazilian_phone(): void
     {
         $admin = $this->createAdminUser();
@@ -121,14 +169,120 @@ class ExpenseTest extends TestCase
 
         $expenseId = $create->json('data.expense.id');
 
-        $this->actingAs($admin, 'sanctum')
+        $response = $this->actingAs($admin, 'sanctum')
             ->postJson("/api/v1/expenses/{$expenseId}/participants", [
                 'participants' => [
                     ['name' => 'Inválido', 'phone' => '1193334444', 'amount' => 100],
                 ],
-            ])
-            ->assertStatus(422)
+            ]);
+
+        $response->assertStatus(422)
             ->assertJsonValidationErrors('participants.0.phone');
+
+        $this->assertSame(
+            'Telefone inválido. Use um número com DDD.',
+            ($response->json('errors')['participants.0.phone'] ?? [null])[0],
+        );
+    }
+
+    public function test_add_participants_accepts_sum_equal_total(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $create = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/expenses', $this->expensePayload([
+                'total_amount' => 100.00,
+            ]));
+        $expenseId = $create->json('data.expense.id');
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/expenses/{$expenseId}/participants", [
+                'participants' => [
+                    ['name' => 'A', 'phone' => '11900000001', 'amount' => 50],
+                    ['name' => 'B', 'phone' => '11900000002', 'amount' => 50],
+                ],
+            ]);
+
+        $response->assertOk();
+
+        $charges = \App\Models\Charge::where('expense_id', $expenseId)->get();
+        $this->assertCount(2, $charges);
+        $this->assertEquals(100.0, round($charges->sum(fn ($c) => (float) $c->amount), 2));
+    }
+
+    public function test_add_participants_accepts_sum_above_total(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $create = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/expenses', $this->expensePayload([
+                'total_amount' => 100.00,
+            ]));
+        $expenseId = $create->json('data.expense.id');
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/expenses/{$expenseId}/participants", [
+                'participants' => [
+                    ['name' => 'A', 'phone' => '11900000001', 'amount' => 70],
+                    ['name' => 'B', 'phone' => '11900000002', 'amount' => 50],
+                ],
+            ]);
+
+        $response->assertOk();
+
+        $charges = \App\Models\Charge::where('expense_id', $expenseId)->orderBy('id')->get();
+        $this->assertCount(2, $charges);
+        $this->assertEquals(120.0, round($charges->sum(fn ($c) => (float) $c->amount), 2));
+        $this->assertEquals(70.0, (float) $charges[0]->amount);
+        $this->assertEquals(50.0, (float) $charges[1]->amount);
+    }
+
+    public function test_add_participants_rejects_missing_name(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $create = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/expenses', $this->expensePayload());
+        $expenseId = $create->json('data.expense.id');
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/expenses/{$expenseId}/participants", [
+                'participants' => [
+                    ['name' => '', 'phone' => '11999998888', 'amount' => 100],
+                ],
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('participants.0.name');
+
+        $this->assertSame(
+            'Informe o nome do participante.',
+            ($response->json('errors')['participants.0.name'] ?? [null])[0],
+        );
+    }
+
+    public function test_add_participants_rejects_missing_phone(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $create = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/expenses', $this->expensePayload());
+        $expenseId = $create->json('data.expense.id');
+
+        $response = $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/expenses/{$expenseId}/participants", [
+                'participants' => [
+                    ['name' => 'Sem telefone', 'phone' => '', 'amount' => 100],
+                ],
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors('participants.0.phone');
+
+        $this->assertSame(
+            'Informe o telefone do participante.',
+            ($response->json('errors')['participants.0.phone'] ?? [null])[0],
+        );
     }
 
     public function test_rounding_is_handled_correctly(): void
@@ -392,7 +546,7 @@ class ExpenseTest extends TestCase
         $this->assertDatabaseCount('charges', 2);
     }
 
-    public function test_add_participants_second_batch_requires_sum_existing_plus_new_equals_total(): void
+    public function test_add_participants_second_batch_accepts_sum_existing_plus_new_above_total(): void
     {
         $admin = $this->createAdminUser();
 
@@ -413,17 +567,19 @@ class ExpenseTest extends TestCase
 
         $this->assertDatabaseCount('charges', 2);
 
-        $bad = $this->actingAs($admin, 'sanctum')
+        $response = $this->actingAs($admin, 'sanctum')
             ->postJson("/api/v1/expenses/{$expenseId}/participants", [
                 'participants' => [
                     ['name' => 'C', 'phone' => '11900000003', 'amount' => 10],
                 ],
             ]);
 
-        $bad->assertStatus(422)
-            ->assertJsonValidationErrors(['participants']);
+        $response->assertOk();
 
-        $this->assertDatabaseCount('charges', 2);
+        $charges = \App\Models\Charge::where('expense_id', $expenseId)->orderBy('id')->get();
+        $this->assertCount(3, $charges);
+        $this->assertEquals(110.0, round($charges->sum(fn ($c) => (float) $c->amount), 2));
+        $this->assertEquals(10.0, (float) $charges[2]->amount);
     }
 
     public function test_non_creator_cannot_patch_expense(): void
@@ -542,7 +698,7 @@ class ExpenseTest extends TestCase
             'expense_participant_id' => $participant->id,
             'status' => 'pending',
         ]);
-        $path = "payment-proofs/{$charge->id}/proof.jpg";
+        $path = "payment-proofs/expense-{$expense->id}/11999999999-20260502-184530001.jpg";
         Storage::disk('local')->put($path, 'jpeg-bytes');
 
         PaymentProof::factory()->create([
@@ -673,7 +829,76 @@ class ExpenseTest extends TestCase
                 ],
             ])
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['participants']);
+            ->assertJsonPath('message', 'Os valores dos participantes ainda não fecham o total da cobrança.')
+            ->assertJsonPath('code', 'PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL');
+    }
+
+    public function test_update_participant_accepts_sum_above_total(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $create = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/expenses', $this->expensePayload([
+                'total_amount' => 100.00,
+            ]));
+        $expenseId = $create->json('data.expense.id');
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/expenses/{$expenseId}/participants", [
+                'participants' => [
+                    ['name' => 'A', 'phone' => '11900000001', 'amount' => 50],
+                    ['name' => 'B', 'phone' => '11900000002', 'amount' => 50],
+                ],
+            ])
+            ->assertOk();
+
+        $participantId = ExpenseParticipant::query()
+            ->where('expense_id', $expenseId)
+            ->where('phone_normalized', '11900000001')
+            ->value('id');
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/v1/expenses/{$expenseId}/participants/{$participantId}", [
+                'amount' => 70,
+            ])
+            ->assertOk();
+
+        $charges = \App\Models\Charge::where('expense_id', $expenseId)->orderBy('id')->get();
+        $this->assertEquals(120.0, round($charges->sum(fn ($c) => (float) $c->amount), 2));
+        $this->assertEquals(70.0, (float) $charges[0]->amount);
+    }
+
+    public function test_update_participant_rejects_sum_below_total(): void
+    {
+        $admin = $this->createAdminUser();
+
+        $create = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/expenses', $this->expensePayload([
+                'total_amount' => 100.00,
+            ]));
+        $expenseId = $create->json('data.expense.id');
+
+        $this->actingAs($admin, 'sanctum')
+            ->postJson("/api/v1/expenses/{$expenseId}/participants", [
+                'participants' => [
+                    ['name' => 'A', 'phone' => '11900000001', 'amount' => 50],
+                    ['name' => 'B', 'phone' => '11900000002', 'amount' => 50],
+                ],
+            ])
+            ->assertOk();
+
+        $participantId = ExpenseParticipant::query()
+            ->where('expense_id', $expenseId)
+            ->where('phone_normalized', '11900000001')
+            ->value('id');
+
+        $this->actingAs($admin, 'sanctum')
+            ->patchJson("/api/v1/expenses/{$expenseId}/participants/{$participantId}", [
+                'amount' => 40,
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Os valores dos participantes ainda não fecham o total da cobrança.')
+            ->assertJsonPath('code', 'PARTICIPANT_TOTAL_BELOW_EXPENSE_TOTAL');
     }
 
     public function test_patch_expense_rejected_when_closed(): void

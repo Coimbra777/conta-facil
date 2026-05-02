@@ -18,6 +18,15 @@ class PublicExpenseTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function assertProofStoredForExpense(string $path, int $expenseId, string $phone): void
+    {
+        $this->assertMatchesRegularExpression(
+            '/^payment-proofs\/expense-'.$expenseId.'\/'.$phone.'-\d{8}-\d{9}\.(jpg|png|pdf)$/',
+            $path,
+        );
+        $this->assertSame("payment-proofs/expense-{$expenseId}", dirname($path));
+    }
+
     private function createExpenseWithCharges(): array
     {
         $admin = User::factory()->create();
@@ -211,7 +220,7 @@ class PublicExpenseTest extends TestCase
     public function test_submit_proof_creates_payment_proof_record(): void
     {
         Storage::fake('local');
-        $this->createExpenseWithCharges();
+        [$expense, , $charge] = $this->createExpenseWithCharges();
 
         $file = ProofUploadFixture::jpegUploadedFile('comprovante.jpg');
         $response = $this->post('/api/v1/public/expenses/test-hash-123/submit-proof', [
@@ -224,10 +233,13 @@ class PublicExpenseTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.status', 'proof_sent');
 
-        $charge = Charge::query()
-            ->whereHas('expenseParticipant', fn ($q) => $q->where('phone', '11900000002'))
-            ->first();
-        $this->assertNotNull($charge);
+        $proof = PaymentProof::query()
+            ->where('charge_id', $charge->id)
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertProofStoredForExpense((string) $proof->file_path, $expense->id, '11900000002');
+        Storage::disk('local')->assertExists($proof->file_path);
         $this->assertDatabaseHas('payment_proofs', [
             'charge_id' => $charge->id,
             'original_filename' => 'comprovante.jpg',
@@ -322,7 +334,7 @@ class PublicExpenseTest extends TestCase
     public function test_submit_proof_uploads_and_sets_proof_sent(): void
     {
         Storage::fake('local');
-        $this->createExpenseWithCharges();
+        [$expense, , $charge] = $this->createExpenseWithCharges();
 
         $this->postJson('/api/v1/public/expenses/test-hash-123/validate-participant', [
             'name' => 'Maria Silva',
@@ -346,14 +358,13 @@ class PublicExpenseTest extends TestCase
             'phone' => '11900000002',
         ]);
 
-        $charge = Charge::query()->where('expense_id', Expense::where('public_hash', 'test-hash-123')->value('id'))
-            ->whereHas('expenseParticipant', fn ($q) => $q->where('phone', '11900000002'))
-            ->first();
-        $this->assertNotNull($charge);
-        $this->assertSame('proof_sent', $charge->status);
-        $this->assertDatabaseHas('payment_proofs', [
-            'charge_id' => $charge->id,
-        ]);
+        $this->assertSame('proof_sent', $charge->fresh()->status);
+        $proof = PaymentProof::query()
+            ->where('charge_id', $charge->id)
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertProofStoredForExpense((string) $proof->file_path, $expense->id, '11900000002');
+        $this->assertStringNotContainsString('/'.$charge->id.'/', (string) $proof->file_path);
     }
 
     public function test_submit_proof_twice_second_returns_422(): void
@@ -421,7 +432,7 @@ class PublicExpenseTest extends TestCase
     public function test_resubmitting_proof_after_rejection_removes_old_file(): void
     {
         Storage::fake('local');
-        [, , $charge2] = $this->createExpenseWithCharges();
+        [$expense, , $charge2] = $this->createExpenseWithCharges();
 
         $this->post('/api/v1/public/expenses/test-hash-123/submit-proof', [
             'name' => 'Maria Silva',
@@ -437,6 +448,12 @@ class PublicExpenseTest extends TestCase
             'reason' => 'Arquivo ilegível.',
         ])->assertOk();
 
+        Storage::disk('local')->assertExists($firstPath);
+
+        $this->get("/api/v1/public/charges/{$charge2->id}/proofs/latest/view", [
+            'X-Manage-Token' => 'manage-token-secret',
+        ])->assertOk()->assertHeader('content-type', 'image/jpeg');
+
         $this->post('/api/v1/public/expenses/test-hash-123/submit-proof', [
             'name' => 'Maria Silva',
             'phone' => '11900000002',
@@ -445,7 +462,9 @@ class PublicExpenseTest extends TestCase
 
         Storage::disk('local')->assertMissing($firstPath);
         $this->assertDatabaseCount('payment_proofs', 1);
-        $this->assertNotSame($firstPath, PaymentProof::query()->firstOrFail()->file_path);
+        $latestPath = (string) PaymentProof::query()->firstOrFail()->file_path;
+        $this->assertNotSame($firstPath, $latestPath);
+        $this->assertProofStoredForExpense($latestPath, $expense->id, '11900000002');
     }
 
     public function test_submit_proof_does_not_match_wrong_exact_name(): void
@@ -615,18 +634,41 @@ class PublicExpenseTest extends TestCase
 
     public function test_close_expense_succeeds_when_all_charges_validated(): void
     {
-        $this->createExpenseWithCharges();
-        Charge::query()->update(['status' => 'validated']);
+        Storage::fake('local');
+        [, $charge1, $charge2] = $this->createExpenseWithCharges();
+
+        $file = ProofUploadFixture::jpegUploadedFile('manual-close.jpg');
+        $this->post('/api/v1/public/expenses/test-hash-123/submit-proof', [
+            'name' => 'Maria Silva',
+            'phone' => '11900000002',
+            'proof' => $file,
+        ])->assertStatus(201);
+
+        $proof = PaymentProof::query()
+            ->where('charge_id', $charge2->id)
+            ->latest('id')
+            ->firstOrFail();
+
+        Storage::disk('local')->assertExists($proof->file_path);
+
+        $charge1->update(['status' => 'validated']);
+        $charge2->update(['status' => 'validated']);
 
         $this->patchJson('/api/v1/public/expenses/test-hash-123/close?manage='.urlencode('manage-token-secret'))
             ->assertOk()
             ->assertJsonPath('data.expense.status', 'closed')
-            ->assertJsonPath('data.expense.is_closed', true);
+            ->assertJsonPath('data.expense.is_closed', true)
+            ->assertJsonPath('data.expense.participants.1.has_proof', false);
 
         $this->assertDatabaseHas('expenses', [
             'public_hash' => 'test-hash-123',
             'status' => 'closed',
         ]);
+        $this->assertDatabaseHas('payment_proofs', [
+            'id' => $proof->id,
+            'file_path' => null,
+        ]);
+        Storage::disk('local')->assertMissing($proof->file_path);
     }
 
     public function test_close_expense_returns_422_when_already_closed(): void
@@ -703,7 +745,7 @@ class PublicExpenseTest extends TestCase
     public function test_public_manage_can_view_latest_proof_inline(): void
     {
         Storage::fake('local');
-        $this->createExpenseWithCharges();
+        [$expense, , $charge] = $this->createExpenseWithCharges();
 
         $this->postJson('/api/v1/public/expenses/test-hash-123/validate-participant', [
             'name' => 'Maria Silva',
@@ -717,9 +759,11 @@ class PublicExpenseTest extends TestCase
             'proof' => $file,
         ])->assertStatus(201);
 
-        $charge = Charge::query()->where('expense_id', Expense::where('public_hash', 'test-hash-123')->value('id'))
-            ->whereHas('expenseParticipant', fn ($q) => $q->where('phone', '11900000002'))
+        $proof = PaymentProof::query()
+            ->where('charge_id', $charge->id)
+            ->latest('id')
             ->firstOrFail();
+        $this->assertProofStoredForExpense((string) $proof->file_path, $expense->id, '11900000002');
 
         $view = $this->get("/api/v1/public/charges/{$charge->id}/proofs/latest/view", [
             'X-Manage-Token' => 'manage-token-secret',
@@ -733,5 +777,76 @@ class PublicExpenseTest extends TestCase
 
         $this->get("/api/v1/public/charges/{$charge->id}/proofs/latest/view")
             ->assertStatus(403);
+    }
+
+    public function test_public_manage_can_download_latest_proof_before_expense_closed(): void
+    {
+        Storage::fake('local');
+        [, , $charge] = $this->createExpenseWithCharges();
+
+        $this->post('/api/v1/public/expenses/test-hash-123/submit-proof', [
+            'name' => 'Maria Silva',
+            'phone' => '11900000002',
+            'proof' => ProofUploadFixture::jpegUploadedFile('download-proof.jpg'),
+        ])->assertStatus(201);
+
+        $download = $this->get("/api/v1/public/charges/{$charge->id}/proof", [
+            'X-Manage-Token' => 'manage-token-secret',
+        ]);
+
+        $download->assertOk()->assertHeader('content-type', 'image/jpeg');
+        $this->assertStringContainsStringIgnoringCase(
+            'attachment',
+            (string) $download->headers->get('Content-Disposition'),
+        );
+    }
+
+    public function test_public_manage_cannot_view_proof_after_expense_closed(): void
+    {
+        Storage::fake('local');
+        [, $charge1, $charge2] = $this->createExpenseWithCharges();
+
+        $file = ProofUploadFixture::jpegUploadedFile('closed-proof.jpg');
+        $this->post('/api/v1/public/expenses/test-hash-123/submit-proof', [
+            'name' => 'Maria Silva',
+            'phone' => '11900000002',
+            'proof' => $file,
+        ])->assertStatus(201);
+
+        $charge1->update(['status' => 'validated']);
+        $charge2->update(['status' => 'validated']);
+
+        $this->patchJson('/api/v1/public/expenses/test-hash-123/close?manage='.urlencode('manage-token-secret'))
+            ->assertOk();
+
+        $this->get("/api/v1/public/charges/{$charge2->id}/proofs/latest/view", [
+            'X-Manage-Token' => 'manage-token-secret',
+        ])->assertStatus(404)
+            ->assertJsonPath('code', 'PROOF_REMOVED_AFTER_EXPENSE_CLOSED')
+            ->assertJsonPath('message', 'Comprovantes excluídos após a finalização da cobrança.');
+    }
+
+    public function test_public_manage_cannot_download_proof_after_expense_closed(): void
+    {
+        Storage::fake('local');
+        [, $charge1, $charge2] = $this->createExpenseWithCharges();
+
+        $this->post('/api/v1/public/expenses/test-hash-123/submit-proof', [
+            'name' => 'Maria Silva',
+            'phone' => '11900000002',
+            'proof' => ProofUploadFixture::jpegUploadedFile('closed-download.jpg'),
+        ])->assertStatus(201);
+
+        $charge1->update(['status' => 'validated']);
+        $charge2->update(['status' => 'validated']);
+
+        $this->patchJson('/api/v1/public/expenses/test-hash-123/close?manage='.urlencode('manage-token-secret'))
+            ->assertOk();
+
+        $this->get("/api/v1/public/charges/{$charge2->id}/proof", [
+            'X-Manage-Token' => 'manage-token-secret',
+        ])->assertStatus(404)
+            ->assertJsonPath('code', 'PROOF_REMOVED_AFTER_EXPENSE_CLOSED')
+            ->assertJsonPath('message', 'Comprovantes excluídos após a finalização da cobrança.');
     }
 }

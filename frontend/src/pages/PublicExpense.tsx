@@ -4,6 +4,7 @@ import { api, isPublicExpenseUsingMock } from "@/lib/api/client";
 import {
     CLOSED_EXPENSE_ORGANIZER,
     CLOSED_EXPENSE_PUBLIC_PARTICIPANT,
+    PROOF_MANAGEMENT_AUTODELETE_NOTICE,
 } from "@/lib/closedExpenseCopy";
 import { mockApi } from "@/lib/api/mockStore";
 import type { Expense, Participant } from "@/lib/types";
@@ -276,6 +277,9 @@ export default function PublicExpense({
                                 seguro: com ele você aprova ou rejeita comprovantes.
                                 Se perder esse link, não há recuperação automática
                                 neste MVP.
+                            </p>
+                            <p className="rounded-xl border-2 border-dashed border-foreground/30 bg-background/80 px-3 py-2 leading-snug">
+                                {PROOF_MANAGEMENT_AUTODELETE_NOTICE}
                             </p>
                             <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
                                 <CopyButton

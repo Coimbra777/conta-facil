@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Exceptions\HttpApiException;
 use App\Http\Responses\ApiResponse;
 use App\Models\Charge;
 use App\Services\PaymentProofService;
@@ -17,6 +18,12 @@ final class ChargeProofHttpResponse
      */
     public static function latest(Charge $charge, bool $inline): BinaryFileResponse|JsonResponse
     {
+        try {
+            app(PaymentProofService::class)->assertProofAccessible($charge);
+        } catch (HttpApiException $e) {
+            return ApiResponse::error($e->getMessage(), $e->errorCode, $e->status);
+        }
+
         $proof = $charge->latestProof();
         if (! $proof) {
             return ApiResponse::error(
@@ -27,7 +34,7 @@ final class ChargeProofHttpResponse
         }
 
         $disk = Storage::disk('local');
-        if (! $disk->exists($proof->file_path)) {
+        if ($proof->file_path === null || $proof->file_path === '' || ! $disk->exists($proof->file_path)) {
             return ApiResponse::error(
                 PaymentProofService::PROOF_NOT_FOUND_MESSAGE,
                 PaymentProofService::PROOF_NOT_FOUND_CODE,

@@ -1,86 +1,62 @@
-Corrigir testes que falharam após a implementação da validação de telefone brasileiro.
+Ajustar organização dos comprovantes no storage.
 
-Contexto:
-Implementamos validação correta de telefone BR:
+Problema:
+Atualmente o sistema cria uma pasta separada para cada comprovante. Queremos organizar os arquivos por cobrança.
 
-- celular: 11 dígitos e terceiro dígito = 9
-- fixo: 10 dígitos e terceiro dígito != 9
+Nova regra:
 
-Problema atual:
-Alguns testes estão usando telefones inválidos segundo a nova regra, por exemplo:
-"11888887777"
+- Cada cobrança deve ter uma pasta própria no storage.
+- Todos os comprovantes daquela cobrança devem ficar dentro dessa pasta.
+- O nome do arquivo deve permitir identificar o participante sem expor nome:
+    - usar telefone normalizado + data/hora;
+    - exemplo: payment-proofs/expense-{expense_id}/{phone_normalized}-{timestamp}.{ext}
 
-Esse número tem 11 dígitos, mas o terceiro dígito é "8", então não é um celular válido.
+Exemplo:
+payment-proofs/expense-42/98997013066-20260502-184530.pdf
 
-Erro atual:
-Expected status 200, but got 422 (Telefone inválido)
+Regras:
 
----
+1. Não usar nome do participante no arquivo.
+2. Usar telefone normalizado.
+3. Usar timestamp para evitar conflito.
+4. Manter storage privado.
+5. Manter validação por extensão/magic bytes.
+6. Manter exclusão automática dos arquivos quando a cobrança for finalizada.
+7. Manter comportamento de reenvio após rejeição:
+    - quando um novo comprovante for enviado após rejeição, excluir o arquivo anterior.
+8. Rejeitar comprovante NÃO deve obrigatoriamente excluir o arquivo imediatamente, porque o organizador pode precisar revisar histórico da rejeição enquanto a cobrança está aberta.
+9. Após finalização da cobrança, todos os comprovantes devem ser excluídos e file_path deve virar null.
 
-## Tarefa
+Revisar arquivos:
 
-1. Revisar todos os testes que usam telefone:
+- app/Services/PaymentProofService.php
+- app/Actions/Charge/RejectChargeAction.php
+- app/Actions/Charge/ValidateChargeAction.php
+- app/Services/ExpenseService.php
+- app/Support/ChargeProofHttpResponse.php
+- testes de PaymentProof/PublicExpense/PaymentValidation
 
-- tests/Feature/\*
-- tests/Unit/\*
-- factories
-- seeders (se houver)
+Testes esperados:
 
-2. Substituir telefones inválidos por válidos:
-
-Para celular:
-
-- usar padrão: DDD + 9 + 8 dígitos
-- exemplos válidos:
-    - "11988887777"
-    - "11999990000"
-    - "(11) 98888-7777"
-
-Para fixo (se o sistema permitir):
-
-- exemplos:
-    - "1133334444"
-
-3. Regra:
-
-- NÃO usar números com 11 dígitos que não começam com 9 no terceiro dígito
-- NÃO usar números curtos
-- NÃO usar números inválidos tipo "123"
-
-4. Ajustar especificamente o teste que falhou:
-
-Arquivo:
-tests/Feature/Expense/ExpenseTest.php
-
-Trocar:
-"11888887777"
-
-Por:
-"11988887777"
-
-5. Garantir consistência:
-
-- todos os testes devem usar telefones válidos
-- manter formato simples (sem máscara) se já for padrão dos testes
-
----
-
-## Testes
+- upload salva comprovante em pasta da cobrança;
+- nome do arquivo contém telefone normalizado e timestamp;
+- não cria pasta única por comprovante;
+- reenvio após rejeição remove arquivo antigo;
+- rejeição sozinha mantém arquivo disponível enquanto cobrança está aberta;
+- finalização da cobrança remove todos os arquivos da pasta da cobrança;
+- preview/download continua funcionando antes do fechamento;
+- preview/download retorna PROOF_REMOVED_AFTER_EXPENSE_CLOSED após fechamento.
 
 Executar:
 
-php artisan test
+- php artisan test
+- npm run test
+- npm run build
 
-Critério:
+Entregar:
 
-- 100% dos testes passando
-- nenhum erro de validação de telefone em cenários que deveriam ser válidos
-
----
-
-## Entrega
-
-- lista de arquivos alterados
-- quais telefones foram corrigidos
-- confirmação de testes passando
-- se encontrou outros casos semelhantes
+- arquivos alterados;
+- novo padrão de path;
+- regra confirmada sobre rejeição;
+- testes executados;
+- impacto no fluxo.

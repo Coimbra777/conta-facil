@@ -26,7 +26,12 @@ class ChargeResource extends JsonResource
             'proof_status' => $this->whenLoaded('paymentProofs', function () {
                 return $this->paymentProofs->sortByDesc('id')->first()?->status;
             }),
-            'has_proof' => $this->whenLoaded('paymentProofs', fn () => $this->paymentProofs->isNotEmpty()),
+            'has_proof' => $this->whenLoaded('paymentProofs', function () use ($charge) {
+                $latest = $charge->paymentProofs->sortByDesc('id')->first();
+
+                return $latest?->file_path !== null
+                    && $latest?->file_path !== '';
+            }),
             'proof_uploaded_at' => $this->whenLoaded('paymentProofs', function () use ($charge) {
                 $latest = $charge->paymentProofs->sortByDesc('id')->first();
 

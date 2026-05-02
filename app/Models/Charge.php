@@ -119,13 +119,17 @@ class Charge extends Model
             $latestProof = $this->paymentProofs->sortByDesc('id')->first();
         }
 
+        $hasAccessibleProof = $latestProof !== null
+            && $latestProof->file_path !== null
+            && $latestProof->file_path !== '';
+
         return [
             'charge_id' => $this->id,
             'charge_status' => $this->status,
             'amount' => $this->amount,
             'name' => $row['name'],
             'phone' => $row['phone'],
-            'has_proof' => $latestProof !== null,
+            'has_proof' => $hasAccessibleProof,
             'proof_uploaded_at' => $latestProof?->created_at?->toIso8601String(),
         ];
     }
