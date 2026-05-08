@@ -1,6 +1,9 @@
+
 # ContaCerta Pix
 
 Sistema para organizar cobranças compartilhadas via Pix.
+
+<img width="1590" height="876" alt="conta-certa1" src="https://github.com/user-attachments/assets/3ef7eae7-c45e-42f3-8387-8fe756ee4f1a" />
 
 ## Requisitos
 
